@@ -16,6 +16,7 @@ line-length = 120
 
 [dependency-groups]
 dev = [
+    { include-group = 'test' },
     'ruff',
     "pyright",
     'rich'

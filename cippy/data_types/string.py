@@ -62,7 +62,7 @@ class STRINGN(StringDataType):  # noqa
         Encoding.utf_32: "utf-32-le",
     }
 
-    encoding: str
+    encoding: str = "utf-8"
 
     def __new__(cls, value: str, encoding: Encoding = Encoding.utf_8, *args, **kwargs) -> STRINGN:
         try:
