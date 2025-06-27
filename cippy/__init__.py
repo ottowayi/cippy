@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from cippy!")
+from ._logging import get_logger
