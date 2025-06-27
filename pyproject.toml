@@ -1,0 +1,28 @@
+[project]
+name = "cippy"
+version = "0.0.0"
+description = "A pure Python EtherNet/IP library"
+readme = "README.md"
+authors = [
+    { name = "io", email = "ian@ottoway.dev" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.ruff]
+line-length = 120
+
+[dependency-groups]
+dev = [
+    'ruff',
+    "pyright",
+]
+test = [
+    'pytest',
+    'pytest-pretty',
+    'pytest-mock',
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
