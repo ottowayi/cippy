@@ -1,4 +1,4 @@
-from cippy.data_types import DINT, SINT, INT, StructType, STRING, array
+from cippy.data_types import DINT, SINT, INT, Struct, STRING, array
 from cippy.data_types._base import ArrayType
 import pytest
 from cippy.exceptions import DataError
@@ -56,7 +56,7 @@ def test_array_slicing():
 
 
 def test_array_struct():
-    class S1(StructType):
+    class S1(Struct):
         x: DINT = 0
         y: STRING = "xyz"
         z: DINT[...] = DINT[3]([1, 2, 3])

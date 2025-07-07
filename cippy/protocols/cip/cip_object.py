@@ -10,7 +10,7 @@ from typing import (
     cast,
 )
 
-from cippy.data_types import BYTES, UINT, DataType, StructType, attr
+from cippy.data_types import BYTES, UINT, DataType, Struct, attr
 from cippy.data_types.numeric import USINT
 from cippy.map import EnumMap
 from cippy.util import StatusEnum
@@ -42,7 +42,7 @@ class _CIPService:
     func: Callable
 
 
-class GetAttrsAll(StructType):
+class GetAttrsAll(Struct):
     def __getattribute__(self, item) -> DataType | None:
         try:
             return super().__getattribute__(item)
@@ -227,7 +227,7 @@ class CIPObject[TIns: GetAttrsAll, TCls: GetAttrsAll](metaclass=_MetaCIPObject):
     @classmethod
     def get_attribute_list[T: DataType](
         cls, attributes: Sequence[CIPAttribute[T]], instance: int | None = 1
-    ) -> CIPRequest[StructType | BYTES]:
+    ) -> CIPRequest[Struct | BYTES]:
         members: list[tuple[str, type[AttrListItem[T]], Field[AttrListItem[T]]]] = []
         for _attr in attributes:
             f_id = field()
@@ -240,7 +240,7 @@ class CIPObject[TIns: GetAttrsAll, TCls: GetAttrsAll](metaclass=_MetaCIPObject):
                 type[AttrListItem[T]],
                 type(
                     f"{_attr.name}_GetAttrListItem",
-                    (StructType,),
+                    (Struct,),
                     {"id": f_id, "status": f_status, "data": f_data, "__bool__": (lambda self: self.status == SUCCESS)},
                 ),
             )
@@ -249,9 +249,9 @@ class CIPObject[TIns: GetAttrsAll, TCls: GetAttrsAll](metaclass=_MetaCIPObject):
             _member: tuple[str, type[AttrListItem[T]], Field[AttrListItem[T]]] = ("data", _GetAttrsListItem, _field)
             members.append(_member)
 
-        GetAttrListResp = cast(type[StructType], StructType.create(name="GetAttrListResp", members=members))  # pyright: ignore [reportArgumentType]
+        GetAttrListResp = cast(type[Struct], Struct.create(name="GetAttrListResp", members=members))  # pyright: ignore [reportArgumentType]
 
-        parser: CIPResponseParser[StructType | BYTES] = MsgRouterResponseParser(
+        parser: CIPResponseParser[Struct | BYTES] = MsgRouterResponseParser(
             response_type=GetAttrListResp, failed_response_type=BYTES
         )
         return CIPRequest(

@@ -15,13 +15,13 @@ from cippy.data_types import (
     Array,
     ArrayType,
     DataError,
-    StructType,
+    Struct,
     attr,
 )
 
 
 def test_struct_simple():
-    class S1(StructType):
+    class S1(Struct):
         x: UINT
         y: SINT
         z: DINT
@@ -41,12 +41,12 @@ def test_struct_simple():
 
 
 def test_nested_struct():
-    class S1(StructType):
+    class S1(Struct):
         x: DINT
         y: DINT
         z: STRING
 
-    class S2(StructType):
+    class S2(Struct):
         a: S1
         b: DINT
 
@@ -67,17 +67,17 @@ def test_nested_struct():
     assert bytes(s2) == b"\x03\x00\x00\x00\x04\x00\x00\x00\x03\x00Bye\x64\x00\x00\x00"
 
 
-class S1(StructType):
+class S1(Struct):
     x: DINT
     y: STRING
 
 
 def test_struct_array_member():
-    class S1(StructType):
+    class S1(Struct):
         x: DINT
         y: STRING
 
-    class S2(StructType):
+    class S2(Struct):
         a: UINT[USINT]
         b: Annotated[ArrayType[S1, int], 3]
         c: Annotated[SINT[3], "not used"]
@@ -97,7 +97,7 @@ def test_struct_array_member():
     )
 
     # retest with better type hinting
-    class S3(StructType):
+    class S3(Struct):
         a: UINT | int
         b: Array[UINT, USINT] | Sequence[UINT | int]
         c: Annotated[ArrayType[UINT, int], 3] | Sequence[UINT | int]
@@ -113,7 +113,7 @@ def test_struct_array_member():
 
 
 def test_struct_missing_args():
-    class S1(StructType):
+    class S1(Struct):
         x: DINT
         y: STRING[4]
         z: SINT
@@ -124,7 +124,7 @@ def test_struct_missing_args():
     with pytest.raises(DataError):
         S1(2, ["a", "b", "c"], 0)
 
-    class S2(StructType):
+    class S2(Struct):
         a: S1
         b: DINT
 
@@ -136,18 +136,18 @@ def test_struct_missing_args():
 
 
 def test_struct_reserved_field():
-    class S1(StructType):
+    class S1(Struct):
         x: DINT
         _: UINT = attr(reserved=True, default=2)
         y: DINT
 
-    assert S1._members == {"x": DINT, "_": UINT, "y": DINT}
-    assert S1._attributes == {"x": DINT, "y": DINT}
+    assert S1.__struct_members__ == {"x": DINT, "_": UINT, "y": DINT}
+    assert S1.__struct_attributes__ == {"x": DINT, "y": DINT}
     assert bytes(S1(1, 3)) == b"\x01\x00\x00\x00\x02\x00\x03\x00\x00\x00"
 
 
 def test_struct_array_len_ref():
-    class S1(StructType):
+    class S1(Struct):
         x: USINT
         count: UINT = attr(init=False)
         items: USINT[...] = attr(len_ref="count")
@@ -162,7 +162,7 @@ def test_struct_array_len_ref():
     assert s.count == 3
     assert bytes(s) == b"\x01\x03\x00\x01\x02\x03\x03\x00\x00\x00"
 
-    class S2(StructType):
+    class S2(Struct):
         x: USINT
         count: UINT = attr(init=False)
         items: USINT[...] = attr(len_ref=("count", lambda x: x * 2, lambda x: x // 2))
@@ -180,11 +180,11 @@ def test_struct_array_len_ref():
 
 
 def test_struct_size_ref():
-    class S1(StructType):
+    class S1(Struct):
         x: USINT | int
         z: Array[USINT, UINT] | Sequence[int]
 
-    class S2(StructType):
+    class S2(Struct):
         a: DINT | int
         struct_size: UINT = attr(size_ref=True)
         b: SHORT_STRING | str
@@ -207,7 +207,7 @@ def test_struct_size_ref():
 
 
 def test_optional_attrs():
-    class S1(StructType):
+    class S1(Struct):
         x: UINT
         y: USINT | None = attr(default=None, conditional_on="x")
         z: UINT = UINT(0xFFFF)

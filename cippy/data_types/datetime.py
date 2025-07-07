@@ -1,6 +1,6 @@
 from typing import ClassVar
 
-from ._base import StructType
+from ._base import Struct
 from .numeric import DINT, INT, LINT, UDINT, UINT
 
 __all__ = (
@@ -39,7 +39,7 @@ class TIME_OF_DAY(UDINT):
     code = 0xCE  #: 0xCE
 
 
-class DATE_AND_TIME(StructType):
+class DATE_AND_TIME(Struct):
     """
     Date and time of day
     """

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from .cip import CIPSegment
 
 type ArrayableT = (
-    StructType
+    Struct
     | ElementaryDataType[int]
     | ElementaryDataType[float]
     | ElementaryDataType[bool]
@@ -248,15 +248,15 @@ def _process_typehint(typ, _field):
 def _process_fields(cls: "_StructMeta") -> ...:
     _fields = fields(cls)  # noqa
     _type_hints = get_type_hints(cls, include_extras=True)
-    cls._dataclass_fields = {}
-    cls._members = {}
-    cls._attributes = {}
-    cls._array_length_attributes = {}
-    cls._conditional_attributes = {}
-    cls._size_ref = None
+    cls.__struct_dataclass_fields__ = {}
+    cls.__struct_members__ = {}
+    cls.__struct_attributes__ = {}
+    cls.__struct_array_length_sources__ = {}
+    cls.__struct_conditional_attributes__ = {}
+    cls.__struct_size_ref__ = None
 
     for _field in _fields:
-        cls._dataclass_fields[_field.name] = _field
+        cls.__struct_dataclass_fields__[_field.name] = _field
         typ = _type_hints.get(_field.name)
         metadata = _field.metadata or {}
 
@@ -275,23 +275,23 @@ def _process_fields(cls: "_StructMeta") -> ...:
 
         if field_type is None:
             raise DataError(f"Failed to determine type (unsupported annotation) for field: {_field.name}")
-        cls._members[_field.name] = field_type
+        cls.__struct_members__[_field.name] = field_type
         if not metadata.get("reserved"):
-            cls._attributes[_field.name] = field_type
+            cls.__struct_attributes__[_field.name] = field_type
         if len_ref := metadata.get("len_ref"):
             if not issubclass(field_type, (ArrayType, BYTES)):
                 raise DataError(f"Fields with 'len_ref' must be Arrays: {_field.name}")
-            if len_ref[0] not in cls._members:
+            if len_ref[0] not in cls.__struct_members__:
                 raise DataError(f"Invalid 'len_ref', {len_ref[0]} is not a previous member of the struct")
-            cls._array_length_attributes[_field.name] = len_ref
+            cls.__struct_array_length_sources__[_field.name] = len_ref
         if size_ref := metadata.get("size_ref"):
-            if cls._size_ref is not None:
-                raise DataError(f"'size_ref' already defined for struct field: {cls._size_ref[0]}")
-            cls._size_ref = _field.name, *size_ref
+            if cls.__struct_size_ref__ is not None:
+                raise DataError(f"'size_ref' already defined for struct field: {cls.__struct_size_ref__[0]}")
+            cls.__struct_size_ref__ = _field.name, *size_ref
         if conditional_on := metadata.get("conditional_on"):
             if _field.default is not None:
                 raise DataError("'conditional_on' fields must provide a default of None")
-            cls._conditional_attributes[_field.name] = conditional_on
+            cls.__struct_conditional_attributes__[_field.name] = conditional_on
 
 
 def _default_ref_callable(value: DataType | int) -> int:
@@ -415,14 +415,14 @@ def attr[T: DataType](
 
 @dataclass_transform(field_specifiers=(attr,))
 class _StructMeta(DataclassMeta, _DataTypeMeta):
-    _members: dict[str, type[DataType]]
-    _attributes: dict[str, type[DataType]]
-    _dataclass_fields: dict[str, Field]
-    _array_length_attributes: dict[str, tuple[str, Callable[[DataType], int], Callable[[DataType], int]]]
-    _conditional_attributes: dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
-    _size_ref: tuple[str, Callable[[DataType], int], Callable[[DataType], int]] | None
+    __struct_members__: dict[str, type[DataType]]
+    __struct_attributes__: dict[str, type[DataType]]
+    __struct_dataclass_fields__: dict[str, Field]
+    __struct_array_length_sources__: dict[str, tuple[str, Callable[[DataType], int], Callable[[DataType], int]]]
+    __struct_conditional_attributes__: dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
+    __struct_size_ref__: tuple[str, Callable[[DataType], int], Callable[[DataType], int]] | None
 
-    __parent_struct__: "tuple[StructType, str] | None"
+    __parent_struct__: "tuple[Struct, str] | None"
     __parent_array__: "tuple[ArrayType, int] | None"
     __encoded_fields__: dict[str, bytes]
     __initialized__: bool
@@ -437,46 +437,50 @@ class _StructMeta(DataclassMeta, _DataTypeMeta):
 
     @property
     def size(cls) -> int:
-        return sum(sz for typ in cls._members.values() if (sz := typ.size) != -1)
+        return sum(sz for typ in cls.__struct_members__.values() if (sz := typ.size) != -1)
 
 
 type StructValuesType = dict[str, DataType] | Sequence[DataType]
 
 
 @dataclass_transform(field_specifiers=(attr,))
-class StructType(DataType, metaclass=_StructMeta):
+class Struct(DataType, metaclass=_StructMeta):
     """
     Base type for a structure
     """
 
     # -- Set by metaclass, for doing cool shit automatically --
     #: map of all members inside the struct and their types
-    _members: ClassVar[dict[str, type[DataType]]]
+    __struct_members__: ClassVar[dict[str, type[DataType]]]
     #: mapping of _user_ members of the struct to their type,
     #: excluding reserved or private members not meant for users to interact with
-    _attributes: ClassVar[dict[str, type[DataType]]]
+    __struct_attributes__: ClassVar[dict[str, type[DataType]]]
     #: map of field names to dataclass Field objects, to avoid having to call fields() all the time
-    _dataclass_fields: ClassVar[dict[str, Field]]
+    __struct_dataclass_fields__: ClassVar[dict[str, Field]]
     #: map of array field names to the field name that is the source of the length of the array
-    _array_length_attributes: ClassVar[dict[str, tuple[str, Callable[[DataType], int], Callable[[DataType], int]]]]
-    _size_ref: ClassVar[tuple[str, Callable[[int], int], Callable[[int], int]] | None]
-    _conditional_attributes: ClassVar[dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]]
+    __struct_array_length_sources__: ClassVar[
+        dict[str, tuple[str, Callable[[DataType], int], Callable[[DataType], int]]]
+    ]
+    __struct_size_ref__: ClassVar[tuple[str, Callable[[int], int], Callable[[int], int]] | None]
+    __struct_conditional_attributes__: ClassVar[
+        dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
+    ]
 
     __field_descriptions__: ClassVar[dict[str, dict[DataType | None, str]]] = {}
 
     def __post_init__(self, *args, **kwargs) -> None:
-        for member, typ in self._members.items():
-            if issubclass(typ, (StructType, ArrayType)):
+        for member, typ in self.__struct_members__.items():
+            if issubclass(typ, (Struct, ArrayType)):
                 getattr(self, member).__parent_struct__ = (self, member)
-            if self._size_ref and member == self._size_ref[0]:
+            if self.__struct_size_ref__ and member == self.__struct_size_ref__[0]:
                 continue
             value = getattr(self, member)
             if not isinstance(value, typ) and (
-                (member in self._conditional_attributes and value is not None)
-                or member not in self._conditional_attributes
+                (member in self.__struct_conditional_attributes__ and value is not None)
+                or member not in self.__struct_conditional_attributes__
             ):
                 try:
-                    if issubclass(typ, StructType):
+                    if issubclass(typ, Struct):
                         value = typ(**cast(Mapping[str, Any], value))
                     else:
                         value = typ(value)
@@ -486,7 +490,7 @@ class StructType(DataType, metaclass=_StructMeta):
                     setattr(self, member, value)
             if member not in self.__encoded_fields__:  # type: ignore
                 try:
-                    if conditional_on := self._conditional_attributes.get(member):
+                    if conditional_on := self.__struct_conditional_attributes__.get(member):
                         ref, decode_func, encode_func = conditional_on
                         val = bytes(value) if encode_func(getattr(self, ref)) else b""
                     else:
@@ -514,10 +518,10 @@ class StructType(DataType, metaclass=_StructMeta):
         if key.startswith("__") and key.endswith("__"):
             return super().__setattr__(key, value)
 
-        if key not in self.__class__._members:
+        if key not in self.__class__.__struct_members__:
             raise AttributeError(f"{key!r} is not an attribute of struct {self.__class__.__name__}")
-        typ = self.__class__._members[key]
-        if conditional_on := self._conditional_attributes.get(key):
+        typ = self.__class__.__struct_members__[key]
+        if conditional_on := self.__struct_conditional_attributes__.get(key):
             ref, decode_func, encode_func = conditional_on
             if value is not None and not encode_func(getattr(self, ref)):
                 raise DataError(
@@ -525,14 +529,14 @@ class StructType(DataType, metaclass=_StructMeta):
                 )
         if value is not None and not isinstance(value, typ):
             try:
-                if issubclass(typ, StructType):
+                if issubclass(typ, Struct):
                     value = typ(**cast(Mapping[str, Any], value))
                 else:
                     value = typ(value)
             except Exception as err:
                 raise DataError(f"Type conversion error for attribute {key!r}") from err
         try:
-            if len_ref := self._array_length_attributes.get(key):
+            if len_ref := self.__struct_array_length_sources__.get(key):
                 ref, decode_func, encode_func = len_ref
                 setattr(self, ref, encode_func(len(value)))  # type: ignore
         except Exception as err:
@@ -545,7 +549,7 @@ class StructType(DataType, metaclass=_StructMeta):
             raise DataError(f"Error encoding attribute {key!r}") from err
         super().__setattr__(key, value)
 
-        if issubclass(typ, (StructType, ArrayType)):
+        if issubclass(typ, (Struct, ArrayType)):
             value.__parent_struct__ = (self, key)  # type: ignore
 
         if self.__parent_struct__ is not None:
@@ -556,56 +560,56 @@ class StructType(DataType, metaclass=_StructMeta):
             parent, my_index = self.__parent_array__
             parent._encoded_array[my_index] = bytes(self)  # noqa
 
-        if self._size_ref is not None and key != self._size_ref[0]:
+        if self.__struct_size_ref__ is not None and key != self.__struct_size_ref__[0]:
             self._update_size_ref()
 
     def _update_size_ref(self) -> None:
-        if self._size_ref is None or not self.__initialized__:
+        if self.__struct_size_ref__ is None or not self.__initialized__:
             return
-        ref_name, decode_func, encode_func = self._size_ref
-        member_list = list(self._members)
+        ref_name, decode_func, encode_func = self.__struct_size_ref__
+        member_list = list(self.__struct_members__)
         following_members = member_list[member_list.index(ref_name) + 1 :]
         new_size = encode_func(sum(len(self.__encoded_fields__[m]) for m in following_members))  # type: ignore
         self.__setattr__(ref_name, new_size)
 
     def __iter__(self):
-        yield from ((m, self[m]) for m in self._members)
+        yield from ((m, self[m]) for m in self.__struct_members__)
 
     def __getitem__(self, item: str) -> Self:
-        if item not in self.__class__._members:
+        if item not in self.__class__.__struct_members__:
             raise DataError(f"Invalid member name: {item}")
 
         return getattr(self, item)
 
     def __setitem__(self, item: str, value: Any) -> None:
-        if item not in self.__class__._members:
+        if item not in self.__class__.__struct_members__:
             raise DataError(f"Invalid member name: {item}")
 
         setattr(self, item, value)
 
     def keys(self):
-        return self.__class__._members.keys()
+        return self.__class__.__struct_members__.keys()
 
     def __bytes__(self: Self) -> bytes:
         return self.__class__.encode(self)
 
     @classmethod
     def _encode(cls: type[Self], value: Self, *args, **kwargs) -> bytes:
-        for member in cls._members:
-            if conditional_on := cls._conditional_attributes.get(member):
+        for member in cls.__struct_members__:
+            if conditional_on := cls.__struct_conditional_attributes__.get(member):
                 ref, decode_func, encode_func = conditional_on
                 ref_value = getattr(value, ref)
                 member_value = value.__encoded_fields__[member]
                 if encode_func(ref_value) and not member_value:
                     raise DataError(f"conditional attribute {member!r} missing based on {ref!r} value of {member_value}")  # fmt: skip
-        return b"".join(value.__encoded_fields__[attr_name] for attr_name in cls._members)  # type: ignore
+        return b"".join(value.__encoded_fields__[attr_name] for attr_name in cls.__struct_members__)  # type: ignore
 
     @classmethod
     def _decode(cls: type[Self], stream: BytesIO) -> Self:
         values: dict[str, DataType] = {}
-        for name, typ in cls._members.items():
+        for name, typ in cls.__struct_members__.items():
             try:
-                if len_ref := cls._array_length_attributes.get(name):
+                if len_ref := cls.__struct_array_length_sources__.get(name):
                     ref, decode_func, encode_func = len_ref
                     typ = cast(type[ArrayType[type[ArrayableT], int]], typ)
                     length = decode_func(values[ref])
@@ -614,12 +618,14 @@ class StructType(DataType, metaclass=_StructMeta):
                     else:
                         _array = array(typ.element_type, length)
                     value = _array.decode(stream)
-                elif conditional_on := cls._conditional_attributes.get(name):
+                elif conditional_on := cls.__struct_conditional_attributes__.get(name):
                     ref, decode_func, encode_func = conditional_on
                     if decode_func(values[ref]):
                         value = typ.decode(stream)
                     else:
-                        value = cast(DataType, cls._dataclass_fields[name].default)  # could be None too, but idgaf
+                        value = cast(
+                            DataType, cls.__struct_dataclass_fields__[name].default
+                        )  # could be None too, but idgaf
                 else:
                     value = typ.decode(stream)
             except Exception as err:
@@ -627,7 +633,7 @@ class StructType(DataType, metaclass=_StructMeta):
             else:
                 values[name] = value
 
-        post_init_vars = {name: val for name, val in values.items() if not cls._dataclass_fields[name].init}
+        post_init_vars = {name: val for name, val in values.items() if not cls.__struct_dataclass_fields__[name].init}
         init_vars = {k: v for k, v in values.items() if k not in post_init_vars}
         instance = cls(**init_vars)
         for name, val in post_init_vars.items():
@@ -639,7 +645,7 @@ class StructType(DataType, metaclass=_StructMeta):
         cls,
         name: str,
         members: Sequence[tuple[str, type[T]]] | Sequence[tuple[str, type[T], Field[T]]],
-    ) -> type["StructType"]:
+    ) -> type["Struct"]:
         _fields: list[tuple[str, type[T], Field[T] | None]] = []
         member: tuple[str, type[T]] | tuple[str, type[T], Field]
         for i, member in enumerate(members):
@@ -658,7 +664,7 @@ class StructType(DataType, metaclass=_StructMeta):
 
             _fields.append((_name, typ, _field))
 
-        struct_class = cast(type[StructType], make_dataclass(cls_name=name, fields=_fields, bases=(cls,)))
+        struct_class = cast(type[Struct], make_dataclass(cls_name=name, fields=_fields, bases=(cls,)))
 
         return struct_class
 
@@ -669,7 +675,7 @@ class StructType(DataType, metaclass=_StructMeta):
         return self.__field_descriptions__[field_name].get(getattr(self, field_name))
 
     def __field_reprs__(self):
-        for name in self._members:
+        for name in self.__struct_members__:
             value = getattr(self, name)
             desc = self.__get_description__(name)
             if desc:
@@ -760,7 +766,7 @@ class ArrayType[ElementT: type[ArrayableT], LenT: ArrayLenT](DataType, metaclass
                     raise DataError(f"Array length error: expected {self.length} items, received {len(value)}")
 
         self._array = [self._convert_element(v) for v in value]
-        if issubclass(self.element_type, StructType):
+        if issubclass(self.element_type, Struct):
             for i, obj in enumerate(self._array):
                 obj.__parent_array__ = (self, i)  # type: ignore
         self._encoded_array = [bytes(x) for x in self._array]

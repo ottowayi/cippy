@@ -2,7 +2,7 @@ from ..cip_object import CIPObject, CIPAttribute
 from cippy.data_types import (
     UINT,
     SHORT_STRING,
-    StructType,
+    Struct,
     PADDED_EPATH,
     PACKED_EPATH,
     PADDED_EPATH_LEN,
@@ -10,17 +10,17 @@ from cippy.data_types import (
 from cippy.util import IntEnumX
 
 
-class InstanceInfo(StructType):
+class InstanceInfo(Struct):
     port_type: UINT
     port_number: UINT
 
 
-class LinkObject(StructType):
+class LinkObject(Struct):
     word_length: UINT
     link_path: PADDED_EPATH[2]  # pyright: ignore [reportInvalidTypeArguments]
 
 
-class PortInstanceAttrs(StructType):
+class PortInstanceAttrs(Struct):
     port_type: UINT
     port_number: UINT
     link_object: LinkObject
@@ -28,7 +28,7 @@ class PortInstanceAttrs(StructType):
     node_address: PADDED_EPATH
 
 
-class PortClassAttrs(StructType):
+class PortClassAttrs(Struct):
     object_revision: UINT
     max_instance: UINT
     num_instances: UINT

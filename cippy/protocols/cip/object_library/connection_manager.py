@@ -15,7 +15,7 @@ from cippy.data_types import (
     WORD,
     Array,
     DataType,
-    StructType,
+    Struct,
     as_stream,
     attr,
 )
@@ -27,7 +27,7 @@ from ..msg_router_services import MessageRouterRequest, MsgRouterResponseParser,
 from .._base import CIPRequest, CIPResponse
 
 
-class ForwardOpenRequest(StructType):
+class ForwardOpenRequest(Struct):
     priority_tick_time: USINT
     timeout_ticks: USINT
     o2t_connection_id: UDINT
@@ -45,7 +45,7 @@ class ForwardOpenRequest(StructType):
     connection_path: PADDED_EPATH_LEN
 
 
-class LargeForwardOpenRequest(StructType):
+class LargeForwardOpenRequest(Struct):
     priority_tick_time: USINT
     timeout_ticks: USINT
     o2t_connection_id: UDINT
@@ -63,7 +63,7 @@ class LargeForwardOpenRequest(StructType):
     connection_path: PADDED_EPATH_LEN
 
 
-class ForwardOpenResponse(StructType):
+class ForwardOpenResponse(Struct):
     o2t_connection_id: UDINT
     t2o_connection_id: UDINT
     connection_serial: UINT
@@ -110,7 +110,7 @@ class ProductionTrigger(IntEnum):
     # 3-7 reserved by CIP
 
 
-class ForwardOpenFailedResponse(StructType):
+class ForwardOpenFailedResponse(Struct):
     connection_serial: UINT
     originator_vendor_id: UINT
     originator_serial: UDINT
@@ -118,7 +118,7 @@ class ForwardOpenFailedResponse(StructType):
     _reserved: USINT = attr(reserved=True, default=USINT(0))
 
 
-class ForwardCloseRequest(StructType):
+class ForwardCloseRequest(Struct):
     priority_tick_time: USINT
     timeout_ticks: USINT
     connection_serial: UINT
@@ -127,7 +127,7 @@ class ForwardCloseRequest(StructType):
     connection_path: PADDED_EPATH_PAD_LEN
 
 
-class ForwardCloseResponse(StructType):
+class ForwardCloseResponse(Struct):
     connection_serial: UINT
     originator_vendor_id: UINT
     originator_serial: UDINT
@@ -136,7 +136,7 @@ class ForwardCloseResponse(StructType):
     application_reply: BYTES = attr(len_ref="application_reply_size")
 
 
-class ForwardCloseFailedResponse(StructType):
+class ForwardCloseFailedResponse(Struct):
     connection_serial: UINT
     originator_vendor_id: UINT
     originator_serial: UDINT
@@ -167,7 +167,7 @@ class TickTime(IntEnum):
     ms_32768 = 0b_1111
 
 
-class UnconnectedSendRequest(StructType):
+class UnconnectedSendRequest(Struct):
     """
 
     Request timeout = tick_time * num_ticks
@@ -231,18 +231,18 @@ class UnconnectedSendRequest(StructType):
         )
 
 
-class UnconnectedSendResponseHeader(StructType):
+class UnconnectedSendResponseHeader(Struct):
     reply_service: USINT
     _reserved: USINT = attr(reserved=True, default=USINT(0))
     general_status: USINT  # pyright: ignore [reportGeneralTypeIssues]
 
 
-class UnconnectedSendSuccessResponse(StructType):
+class UnconnectedSendSuccessResponse(Struct):
     _reserved2: USINT = attr(reserved=True, default=USINT(0))
     service_response_data: BYTES  # pyright: ignore [reportGeneralTypeIssues]
 
 
-class UnconnectedSendFailedResponse(StructType):
+class UnconnectedSendFailedResponse(Struct):
     additional_status: Array[UINT, USINT]
     remaining_path_size: USINT
 

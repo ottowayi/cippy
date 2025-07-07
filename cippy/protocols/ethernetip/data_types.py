@@ -13,7 +13,7 @@ from cippy.data_types import (
     WORD,
     Array,
     IPAddress_BE,
-    StructType,
+    Struct,
     as_stream,
     attr,
     buff_repr,
@@ -60,7 +60,7 @@ ETHERNETIP_STATUS_CODES: dict[UDINT, str] = {
 }
 
 
-class EtherNetIPHeader(StructType):
+class EtherNetIPHeader(Struct):
     command: UINT
     length: UINT
     session: UDINT
@@ -105,7 +105,7 @@ CPF_ITEM_TYPE_NAMES: Final[dict[UINT, str]] = {
 }
 
 
-class CPFItem(StructType):
+class CPFItem(Struct):
     type_id: UINT
     length: UINT
 
@@ -158,7 +158,7 @@ class ConnectedData(CPFItem):
     data: BYTES = attr(init=True, len_ref="length")
 
 
-class Sockaddr(StructType):
+class Sockaddr(Struct):
     sin_family: INT_BE
     sin_port: UINT_BE
     sin_addr: IPAddress_BE
@@ -186,12 +186,12 @@ class CIPIdentity(CPFItem):
     state: USINT
 
 
-class ListIdentityData(StructType):
+class ListIdentityData(Struct):
     count: UINT = attr(init=False)
     identities: Array[CPFItem, None] | Sequence[CPFItem] = attr(len_ref="count")
 
 
-class RegisterSessionData(StructType):
+class RegisterSessionData(Struct):
     protocol_version: UINT | int = 1
     options_flags: UINT | int = 0
 
@@ -204,7 +204,7 @@ class ServiceInfo(CPFItem):
     service_name: BYTES[16] | bytes = attr(default=b"Communications\x00\x00")
 
 
-class ListServicesData(StructType):
+class ListServicesData(Struct):
     count: UINT | int = attr(init=False)
     services: Array[ServiceInfo, None] | Sequence[ServiceInfo] = attr(len_ref="count")
 
@@ -212,7 +212,7 @@ class ListServicesData(StructType):
 InterfaceInfo = BYTES
 
 
-class ListInterfacesData(StructType):
+class ListInterfacesData(Struct):
     count: UINT | int = attr(init=False)
     interfaces: Array[CPFItem, None] | Sequence[CPFItem] = attr(len_ref="count")
 
@@ -221,7 +221,7 @@ type AddressItemsT = NullAddress | SequencedAddress | ConnectedAddress
 type DataItemsT = ConnectedData | UnconnectedData
 
 
-class CommonPacketFormat[AddrT: AddressItemsT, DataT: DataItemsT](StructType):
+class CommonPacketFormat[AddrT: AddressItemsT, DataT: DataItemsT](Struct):
     item_count: UINT = attr(init=False)
     items: Array[CPFItem, None] | Sequence[CPFItem] = attr(init=False, len_ref="item_count")
 
@@ -253,13 +253,13 @@ type SendRRDataPacketFormat = CommonPacketFormat[NullAddress, UnconnectedData]
 type SendUnitDataPacketFormat = CommonPacketFormat[SequencedAddress, ConnectedData]
 
 
-class SendRRDataData(StructType):
+class SendRRDataData(Struct):
     interface_handle: UDINT | int = attr(default=0, init=False)  # always 0 for CIP
     timeout: UINT | int = attr(default=0, init=False)  # typically 0 for CIP, which has its own timeout
     packet: CommonPacketFormat | SendRRDataPacketFormat
 
 
-class SendUnitDataData(StructType):
+class SendUnitDataData(Struct):
     interface_handle: UDINT | int = attr(default=0, init=False)
     timeout: UINT | int = attr(default=0, init=False)
     packet: CommonPacketFormat | SendUnitDataPacketFormat

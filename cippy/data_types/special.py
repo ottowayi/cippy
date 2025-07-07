@@ -1,6 +1,6 @@
 from ipaddress import IPv4Address
 
-from ._base import StructType
+from ._base import Struct
 from .numeric import UDINT, UDINT_BE, USINT
 
 __all__ = ("IPAddress", "IPAddress_BE", "Revision")
@@ -41,6 +41,6 @@ class IPAddress_BE(UDINT_BE):
         return f"{self.__class__.__name__}({int.__str__(self)}: 'INVALID')"
 
 
-class Revision(StructType):
+class Revision(Struct):
     major: USINT
     minor: USINT

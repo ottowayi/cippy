@@ -17,7 +17,7 @@ from cippy.data_types import (
     DataType,
     LogicalSegment,
     LogicalSegmentType,
-    StructType,
+    Struct,
     attr,
 )
 from cippy.exceptions import DataError
@@ -41,7 +41,7 @@ def cip_object_from_path(path: EPATH) -> "type[CIPObject]":
     return CIPObject.__cip_objects__.get(cls_code, CIPObject)
 
 
-class MessageRouterRequest(StructType):
+class MessageRouterRequest(Struct):
     service: USINT | int
     path: PADDED_EPATH_LEN
     data: BYTES | bytes
@@ -64,7 +64,7 @@ class MessageRouterRequest(StructType):
         return MessageRouterRequest(service=service, path=PADDED_EPATH_LEN(cip_segments), data=_data)
 
 
-class MessageRouterResponse(StructType):
+class MessageRouterResponse(Struct):
     service: USINT
     _reserved: USINT
     general_status: USINT
