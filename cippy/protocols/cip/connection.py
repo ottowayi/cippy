@@ -4,14 +4,14 @@ from os import urandom
 from typing import Final, Generator, Literal, Sequence, cast
 
 from cippy import get_logger
-from cippy.data_types import DWORD, UDINT, UINT, USINT, WORD, DataType
+from cippy.data_types import DWORD, UDINT, UINT, USINT, WORD, DataType, Struct
 from cippy.data_types.cip import LogicalSegment, LogicalSegmentType
 from cippy.exceptions import ResponseError
 from cippy.util import cycle
 
 from ..connection import is_connected
 from ..ethernetip import EIPConnection
-from .cip_object import CIPAttribute, CIPObject, GetAttrsAll
+from .cip_object import CIPAttribute, CIPObject
 from .cip_route import CIPRoute
 from .object_library.connection_manager import (
     ConnectionManager,
@@ -102,8 +102,11 @@ class CIPConnection:
         """
         return self.connected and self.config.connected_config.o2t_connection_id != 0
 
-    def get_attributes_all[TIns: GetAttrsAll, TCls: GetAttrsAll](
-        self, cip_object: type[CIPObject[TIns, TCls]], instance: int | None = 1, cip_connected: bool | None = None
+    def get_attributes_all[TIns: Struct, TCls: Struct](
+        self,
+        cip_object: type[CIPObject[TIns, TCls]],
+        instance: int | None = 1,
+        cip_connected: bool | None = None,
     ):
         request = cip_object.get_attributes_all(instance=instance)
         resp = self.send(request, cip_connected=cip_connected)

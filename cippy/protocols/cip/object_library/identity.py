@@ -1,16 +1,67 @@
-from ..cip_object import CIPObject, CIPAttribute, StandardClassAttrs, GetAttrsAll
-from cippy.data_types import UINT, WORD, UDINT, SHORT_STRING, USINT, Revision
 from enum import IntEnum
+from typing import ClassVar
+
+from cippy.const import VENDORS, DeviceTypes
+from cippy.data_types import UINT, WORD, UDINT, SHORT_STRING, USINT, Revision, Struct
+from ..cip_object import CIPObject, CIPAttribute, StandardClassAttrs
 
 
-class IdentityInstanceAttrs(GetAttrsAll):
+class Status(WORD):
+    owned: bool
+    configured: bool
+    extended_status: tuple[bool, bool, bool, bool]
+    minor_recoverable_fault: bool
+    minor_unrecoverable_fault: bool
+    major_recoverable_fault: bool
+    major_unrecoverable_fault: bool
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        bits = [bool(b) for b in self.bits]
+        self.owned = bits[0]
+        self.configured = bits[2]
+        self.extended_status = (bits[4], bits[5], bits[6], bits[7])
+        self.minor_recoverable_fault = bits[8]
+        self.minor_unrecoverable_fault = bits[9]
+        self.major_recoverable_fault = bits[10]
+        self.major_unrecoverable_fault = bits[11]
+
+
+class IdentityInstanceAttrs(Struct):
     vendor_id: UINT
     device_type: UINT
     product_code: UINT
     revision: Revision
-    status: WORD
+    status: Status
     serial_number: UDINT
     product_name: SHORT_STRING
+
+    _vendors: ClassVar[dict[int, str]] = VENDORS
+
+    @property
+    def vendor_name(self) -> str | None:
+        """
+        The vendor name if `vendor_id` is a known vendor, else None.
+        """
+        return self._vendors.get(self.vendor_id, None)
+
+    @property
+    def serial(self) -> str | None:
+        """
+        String version of the serial number formatted as 8 uppercase hex digits.
+        """
+        return f"{self.serial_number:@X}" if self.serial_number is not None else None
+
+    @property
+    def rev(self) -> str | None:
+        """
+        String version of the revision number
+        """
+        return f"{self.revision:@}" if self.revision is not None else None
+
+    @property
+    def device_type_name(self) -> str | None:
+        return DeviceTypes.get_name(self.device_type)
 
 
 class Identity(CIPObject[IdentityInstanceAttrs, StandardClassAttrs]):

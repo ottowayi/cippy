@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import cached_property
 from typing import Generator, Self, cast
 
 from cippy._logging import get_logger
@@ -24,7 +25,7 @@ class CIPDriver:
             case _:
                 raise ValueError("cannot supply both `path` and `connection`")
 
-        self._identity: IdentityInstanceAttrs | None = None
+        # self._identity: IdentityInstanceAttrs | None = None
 
     @property
     def connection(self) -> CIPConnection:
@@ -66,14 +67,16 @@ class CIPDriver:
             self.__log.exception("unhandled client error", exc_info=(exc_type, exc_val, exc_tb))
             return False
 
-    @property
+    @cached_property
     def identity(self) -> IdentityInstanceAttrs | None:
-        if self._identity is None:
-            resp = self._connection.get_attributes_all(Identity)
-            if resp:
-                self._identity = cast(IdentityInstanceAttrs, resp.data)
-
-        return self._identity
+        try:
+            if not (resp := self._connection.get_attributes_all(Identity)):
+                self.__log.error("failed to get identity")
+                return None
+            return cast(IdentityInstanceAttrs, resp.data)
+        except Exception:
+            self.__log.exception("failed to get identity")
+            return None
 
     @contextmanager
     def temporary_route(

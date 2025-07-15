@@ -1,13 +1,13 @@
 from typing import ClassVar, cast
 
-from cippy.data_types import BYTES, EPATH, UINT, USINT, attr
+from cippy.data_types import BYTES, EPATH, UINT, USINT, attr, Struct
 
-from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, StandardClassAttrs, service, GetAttrsAll
+from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, StandardClassAttrs, service
 from ..msg_router_services import message_router_service
 from .._base import CIPRequest
 
 
-class MessageRouterInstanceAttrs(GetAttrsAll):
+class MessageRouterInstanceAttrs(Struct):
     object_list: UINT[UINT]
     num_available: UINT
     num_active: UINT

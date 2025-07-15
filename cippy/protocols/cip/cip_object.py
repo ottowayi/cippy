@@ -12,11 +12,12 @@ from typing import (
 
 from cippy.data_types import BYTES, UINT, DataType, Struct, attr
 from cippy.data_types.numeric import USINT
-from cippy.map import EnumMap
+from cippy.util import PredefinedValues
 from cippy.util import StatusEnum
 
 from .msg_router_services import MessageRouterRequest, MsgRouterResponseParser
 from ._base import SUCCESS, CIPRequest, CIPResponseParser
+from functools import wraps
 
 
 @dataclass
@@ -42,15 +43,7 @@ class _CIPService:
     func: Callable
 
 
-class GetAttrsAll(Struct):
-    def __getattribute__(self, item) -> DataType | None:
-        try:
-            return super().__getattribute__(item)
-        except AttributeError:
-            return None
-
-
-class StandardClassAttrs(GetAttrsAll):
+class StandardClassAttrs(Struct):
     object_revision: UINT
     max_instance: UINT
     num_instances: UINT
@@ -60,7 +53,7 @@ class StandardClassAttrs(GetAttrsAll):
     max_instance_attr: UINT
 
 
-class UnsupportedGetAttrsAll(GetAttrsAll):
+class UnsupportedGetAttrsAll(Struct):
     data: BYTES
 
 
@@ -135,14 +128,14 @@ class AttrListItem[T: DataType](Protocol):
     data: T
 
 
-class CIPObject[TIns: GetAttrsAll, TCls: GetAttrsAll](metaclass=_MetaCIPObject):
+class CIPObject[TIns: Struct, TCls: Struct](metaclass=_MetaCIPObject):
     """
     Base class for all CIP objects.  Defines services, attributes, and other properties common to all CIP objects.
     """
 
     class_code: int = 0
 
-    class Instance(EnumMap):
+    class Instance(PredefinedValues):
         CLASS = 0  #: The class itself and not an instance
         DEFAULT = 1  #: The first instance of a class, used as the default if not specified
 

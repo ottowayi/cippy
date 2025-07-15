@@ -44,3 +44,8 @@ class IPAddress_BE(UDINT_BE):
 class Revision(Struct):
     major: USINT
     minor: USINT
+
+    def __format__(self, format_spec: str) -> str:
+        if format_spec == "@":
+            return f"{self.major:d}.{self.minor:03}"
+        return super().__format__(format_spec)

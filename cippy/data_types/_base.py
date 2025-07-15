@@ -23,7 +23,6 @@ from typing import (
     get_type_hints,
     overload,
 )
-
 from cippy.exceptions import BufferEmptyError, DataError
 from cippy.util import DataclassMeta
 
@@ -465,7 +464,7 @@ class Struct(DataType, metaclass=_StructMeta):
     __struct_conditional_attributes__: ClassVar[
         dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
     ]
-
+    #: map of field names to field values and associated descriptions, these
     __field_descriptions__: ClassVar[dict[str, dict[DataType | None, str]]] = {}
 
     def __post_init__(self, *args, **kwargs) -> None:
@@ -507,7 +506,7 @@ class Struct(DataType, metaclass=_StructMeta):
         self = super().__new__(cls)
         self.__parent_struct__ = None
         self.__parent_array__ = None
-        self.__encoded_fields__ = dict()
+        self.__encoded_fields__ = {}
         self.__initialized__ = False
         return self
 
