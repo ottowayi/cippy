@@ -3,7 +3,7 @@ import logging
 from typing import Final, cast, Generator, Literal
 import string
 
-__all__ = ("Pycomm3Logger", "get_logger", "configure_logging", "VERBOSE_LEVEL")
+__all__ = ("CippyLogger", "get_logger", "configure_logging", "VERBOSE_LEVEL")
 VERBOSE_LEVEL: Final[int] = logging.DEBUG - 5
 VERBOSE_NAME: Final[str] = "VERBOSE"
 
@@ -11,7 +11,7 @@ logging.VERBOSE = VERBOSE_LEVEL  # type: ignore
 logging.addLevelName(VERBOSE_LEVEL, VERBOSE_NAME)
 
 
-class Pycomm3Logger(logging.getLoggerClass()):
+class CippyLogger(logging.getLoggerClass()):
     def verbose(self, msg, *args, **kwargs):
         if self.isEnabledFor(VERBOSE_LEVEL):
             self.log(VERBOSE_LEVEL, msg, *args, stacklevel=kwargs.pop("stacklevel", 2), **kwargs)
@@ -20,7 +20,7 @@ class Pycomm3Logger(logging.getLoggerClass()):
         self.verbose("%s\n    %r\n%s", title, data, LazyHexDump(data), stacklevel=3)
 
 
-class Pycomm3Formatter(logging.Formatter):
+class CippyFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         if record.levelno == VERBOSE_LEVEL:
             with self.temp_log_format("{msg}"):
@@ -40,13 +40,13 @@ class Pycomm3Formatter(logging.Formatter):
             self._fmt = orig_fmt  # type: ignore
 
 
-logging.setLoggerClass(Pycomm3Logger)
+logging.setLoggerClass(CippyLogger)
 
 
-def get_logger(name: str) -> Pycomm3Logger:
+def get_logger(name: str) -> CippyLogger:
     if not name.startswith("cippy"):
         name = f"cippy.{name}"
-    return cast(Pycomm3Logger, logging.getLogger(name))
+    return cast(CippyLogger, logging.getLogger(name))
 
 
 DEFAULT_FORMAT: Final[str] = "{asctime} [{levelname}] {name}.{funcName}:{lineno}:: {message}"
@@ -60,7 +60,7 @@ def configure_logging(
 ) -> None:
     if handler is None:
         handler = logging.StreamHandler()
-    handler.setFormatter(Pycomm3Formatter(fmt=fmt, style=fmt_style))
+    handler.setFormatter(CippyFormatter(fmt=fmt, style=fmt_style))
     logger = logging.getLogger("cippy")
     logger.addHandler(handler)
     logger.setLevel(level)

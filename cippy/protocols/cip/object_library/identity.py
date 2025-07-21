@@ -1,8 +1,8 @@
 from enum import IntEnum
 from typing import ClassVar
 
-from cippy.const import VENDORS, DeviceTypes
-from cippy.data_types import UINT, WORD, UDINT, SHORT_STRING, USINT, Revision, Struct
+from cippy.const import VENDORS, DeviceTypes as _DeviceTypes
+from cippy.data_types import UINT, WORD, UDINT, SHORT_STRING, USINT, Revision, Struct, attr
 from ..cip_object import CIPObject, CIPAttribute, StandardClassAttrs
 
 
@@ -38,6 +38,11 @@ class IdentityInstanceAttrs(Struct):
 
     _vendors: ClassVar[dict[int, str]] = VENDORS
 
+    __field_descriptions__ = {
+        "device_type": {None: "?", **_DeviceTypes.to_dict()},
+        "vendor_id": {None: "?", **VENDORS},
+    }
+
     @property
     def vendor_name(self) -> str | None:
         """
@@ -61,7 +66,7 @@ class IdentityInstanceAttrs(Struct):
 
     @property
     def device_type_name(self) -> str | None:
-        return DeviceTypes.get_name(self.device_type)
+        return _DeviceTypes.get_name(self.device_type)
 
 
 class Identity(CIPObject[IdentityInstanceAttrs, StandardClassAttrs]):
@@ -96,6 +101,9 @@ class Identity(CIPObject[IdentityInstanceAttrs, StandardClassAttrs]):
     state = CIPAttribute(id=8, data_type=USINT)
 
     _svc_get_attrs_all_instance_type: type[IdentityInstanceAttrs] = IdentityInstanceAttrs
+
+    VENDORS: ClassVar[dict[int, str]] = VENDORS
+    DeviceTypes: ClassVar[type[_DeviceTypes]] = _DeviceTypes
 
     class States(IntEnum):
         """
