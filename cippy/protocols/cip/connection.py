@@ -2,10 +2,21 @@ from dataclasses import dataclass, field
 from functools import wraps
 from os import urandom
 from typing import Final, Generator, Literal, Sequence, cast
+from typing_extensions import overload
 
 from cippy import get_logger
-from cippy.data_types import DWORD, UDINT, UINT, USINT, WORD, DataType, Struct
-from cippy.data_types.cip import LogicalSegment, LogicalSegmentType
+from cippy.data_types import (
+    DWORD,
+    UDINT,
+    UINT,
+    USINT,
+    WORD,
+    DataType,
+    Struct,
+    BYTES,
+    LogicalSegment,
+    LogicalSegmentType,
+)
 from cippy.exceptions import ResponseError
 from cippy.util import cycle
 
@@ -25,6 +36,7 @@ from .object_library.connection_manager import (
     LargeForwardOpenRequest,
     ProductionTrigger,
     TickTime,
+    UnconnectedSendFailedResponse,
 )
 from .object_library.message_router import MessageRouter
 from ._base import CIPRequest, CIPResponse
@@ -102,14 +114,26 @@ class CIPConnection:
         """
         return self.connected and self.config.connected_config.o2t_connection_id != 0
 
+    @property
+    def route(self) -> CIPRoute:
+        return self.config.route
+
+    @property
+    def connection_path(self) -> str:
+        if not self.route:
+            return self._transport.config.host
+        return f"{self._transport.config.host}/{self.route}"
+
     def get_attributes_all[TIns: Struct, TCls: Struct](
         self,
         cip_object: type[CIPObject[TIns, TCls]],
         instance: int | None = 1,
         cip_connected: bool | None = None,
-    ):
+    ) -> CIPResponse[TCls | TIns | BYTES] | CIPResponse[TCls | TIns | BYTES | UnconnectedSendFailedResponse]:
         request = cip_object.get_attributes_all(instance=instance)
-        resp = self.send(request, cip_connected=cip_connected)
+        if resp := self.send(request, cip_connected=cip_connected):
+            ...
+
         return resp
 
     def _get_attributes_all_individually(

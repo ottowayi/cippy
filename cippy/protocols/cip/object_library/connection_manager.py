@@ -18,6 +18,7 @@ from cippy.data_types import (
     Struct,
     as_stream,
     attr,
+    array,
 )
 from cippy.util import StatusEnum
 
@@ -236,6 +237,8 @@ class UnconnectedSendResponseHeader(Struct):
     _reserved: USINT = attr(reserved=True, default=USINT(0))
     general_status: USINT  # pyright: ignore [reportGeneralTypeIssues]
 
+    __field_descriptions__ = {"general_status": GeneralStatusCodes.dict()}  # type: ignore
+
 
 class UnconnectedSendSuccessResponse(Struct):
     _reserved2: USINT = attr(reserved=True, default=USINT(0))
@@ -254,8 +257,8 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
     failed_response_type: type[UnconnectedSendFailedResponse] = UnconnectedSendFailedResponse
 
     def parse(
-        self, data: BYTES, request: CIPRequest[T | UnconnectedSendFailedResponse]
-    ) -> CIPResponse[T | UnconnectedSendFailedResponse]:
+        self, data: BYTES, request: CIPRequest[T | UnconnectedSendFailedResponse | Array[UINT, USINT]]
+    ) -> CIPResponse[T | UnconnectedSendFailedResponse | Array[UINT, USINT]]:
         buff = as_stream(data)
         header = UnconnectedSendResponseHeader.decode(buff)
         self.__log.debug("decoded unconnected send response header: %r", header)
@@ -264,20 +267,38 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
             msg_data = self.response_type.decode(resp_data.service_response_data)
             msg = "Success"
         else:
-            msg_data = UnconnectedSendFailedResponse.decode(buff)
+            addl_status = Array[UINT, USINT].decode(buff)
+            match header.general_status, addl_status:
+                case (
+                    GeneralStatusCodes.connection_failure,
+                    [
+                        ConnMgrExtStatusCodesConnFailure.unconnected_send_timeout
+                        | ConnMgrExtStatusCodesConnFailure.port_unavailable
+                        | ConnMgrExtStatusCodesConnFailure.invalid_link_address
+                        | ConnMgrExtStatusCodesConnFailure.invalid_segment,
+                        *_,
+                    ],
+                ) | (GeneralStatusCodes.resource_unavailable | GeneralStatusCodes.path_error, _):
+                    remaining_path_size = USINT.decode(buff)
+                    msg_data = UnconnectedSendFailedResponse(addl_status, remaining_path_size)
+                case _:
+                    msg_data = addl_status
+                    remaining_path_size = None
+
             general_msg, ext_msg = ConnectionManager.get_status_messages(
                 service=request.message.service,
                 status=header.general_status,
-                ext_status=msg_data.additional_status,
-                extra_data=msg_data.remaining_path_size,
+                ext_status=[int(x) for x in addl_status],
+                extra_data=remaining_path_size,
             )
 
             msg = f"({header.general_status:#04x}) {general_msg}: {ext_msg}" if ext_msg else general_msg
-        self.__log.debug("decoded unconnected send response data: %r", header)
+            self.__log.debug("decoded unconnected send response data: %r", msg_data)
+
         return CIPResponse(request=request, message=header, data=msg_data, status_message=msg)
 
 
-# def _bit_count(arr: ArrayType[BOOL, int] ) -> int:
+# def _bit_count(arr:Array[BOOL, int] ) -> int:
 #     return 0  # TODO: need to change encode/decode len_ref to get array and not just len
 
 

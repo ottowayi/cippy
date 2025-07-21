@@ -1,15 +1,20 @@
+from typing_extensions import reveal_type
 from cippy.data_types import DINT, SINT, INT, Struct, STRING, array
-from cippy.data_types._base import ArrayType
+from cippy.data_types._base import ArrayType, Array
 import pytest
 from cippy.exceptions import DataError
 
 
 def test_array_classes():
     assert issubclass(DINT[4], ArrayType)
-    assert DINT[4].element_type is DINT
-    assert DINT[4].length == 4
-    assert DINT[SINT].length is SINT
-    assert DINT[...].length is Ellipsis
+    assert issubclass(DINT[4], Array)
+    d: type[Array[DINT, int]] = array(DINT, 4)
+
+    assert d.element_type is DINT
+    assert d.length == 4
+    assert d is Array[DINT, 4] is DINT[4]
+    assert DINT[SINT].length is SINT  # type: ignore
+    assert DINT[...].length is Ellipsis  # type: ignore
 
     assert DINT[4].size == DINT.size * 4
 
@@ -57,11 +62,12 @@ def test_array_slicing():
 
 def test_array_struct():
     class S1(Struct):
-        x: DINT = 0
-        y: STRING = "xyz"
+        x: DINT | int = 0
+        y: STRING | str = "xyz"
         z: DINT[...] = DINT[3]([1, 2, 3])
 
-    ary = S1[3]([S1(), S1(), S1()])
+    ary = Array[S1, 3]([S1(), S1(), S1()])
+
     assert ary[0].x == 0
     assert bytes(ary) == bytes(S1()) * 3
     ary[1].z[0] = -1

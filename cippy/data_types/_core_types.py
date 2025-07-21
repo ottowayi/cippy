@@ -2,14 +2,14 @@ from io import BytesIO
 from typing import Any, Literal, Self, Sequence
 
 from ..exceptions import DataError
-from ._base import ArrayLenT, ArrayType, ElementaryDataType, _ElementaryDataTypeMeta, array
+from ._base import ArrayLenT, Array, ElementaryDataType, _ElementaryDataTypeMeta, array
 
 # TODO: eventually, come back to see if the __class_getitem__ can be moved to a base/meta class
 #       couldn't get the type hinting to work with the ElementaryDataType generic
 
 
 class IntDataType(ElementaryDataType[int], int, metaclass=_ElementaryDataTypeMeta):
-    def __class_getitem__(cls, item: ArrayLenT) -> type[ArrayType[type[Self], ArrayLenT]]:
+    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
         return array(cls, item)
 
     def __format__(self, format_spec):
@@ -30,7 +30,7 @@ class BoolDataType(ElementaryDataType[bool], int, metaclass=_ElementaryDataTypeM
     def __new__(cls, value: int, *args, **kwargs):
         return super().__new__(cls, True if value else False, *args, **kwargs)
 
-    def __class_getitem__(cls, item: ArrayLenT) -> type[ArrayType[type[Self], ArrayLenT]]:
+    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
         return array(cls, item)
 
     @classmethod
@@ -44,7 +44,7 @@ class BoolDataType(ElementaryDataType[bool], int, metaclass=_ElementaryDataTypeM
 
 
 class FloatDataType(ElementaryDataType[float], float, metaclass=_ElementaryDataTypeMeta):
-    def __class_getitem__(cls, item: ArrayLenT) -> type[ArrayType[type[Self], ArrayLenT]]:
+    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
         return array(cls, item)
 
 
@@ -56,7 +56,7 @@ class StringDataType(ElementaryDataType[str], str, metaclass=_ElementaryDataType
     len_type: type[IntDataType]  #: data type of the string length
     encoding: str = "iso-8859-1"
 
-    def __class_getitem__(cls, item: ArrayLenT) -> type[ArrayType[type[Self], ArrayLenT]]:
+    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
         return array(cls, item)
 
     @classmethod

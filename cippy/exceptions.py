@@ -30,9 +30,3 @@ class RequestError(PycommError):
     """
     For exceptions raised due to issues building requests or processing of user supplied data
     """
-
-
-class DriverError(PycommError):
-    """
-    Generic error for driver related exceptions
-    """

@@ -1,3 +1,4 @@
+from ast import Str
 from dataclasses import Field, dataclass, field, replace
 from inspect import isclass
 from typing import (
@@ -125,7 +126,7 @@ def service(id: USINT):
 class AttrListItem[T: DataType](Protocol):
     id: UINT
     status: UINT
-    data: T
+    data: T | None
 
 
 class CIPObject[TIns: Struct, TCls: Struct](metaclass=_MetaCIPObject):
@@ -221,26 +222,24 @@ class CIPObject[TIns: Struct, TCls: Struct](metaclass=_MetaCIPObject):
     def get_attribute_list[T: DataType](
         cls, attributes: Sequence[CIPAttribute[T]], instance: int | None = 1
     ) -> CIPRequest[Struct | BYTES]:
-        members: list[tuple[str, type[AttrListItem[T]], Field[AttrListItem[T]]]] = []
+        members: list[
+            tuple[str, type[DataType | AttrListItem[T]]] | tuple[str, type[DataType] | AttrListItem[T], Field]
+        ] = [("count", UINT, field())]
         for _attr in attributes:
-            f_id = field()
-            f_id.type = UINT
-            f_status = field()
-            f_status.type = UINT
-            f_data = field()
-            f_data.type = _attr.data_type
             _GetAttrsListItem = cast(
                 type[AttrListItem[T]],
                 type(
                     f"{_attr.name}_GetAttrListItem",
                     (Struct,),
-                    {"id": f_id, "status": f_status, "data": f_data, "__bool__": (lambda self: self.status == SUCCESS)},
+                    {
+                        "data": attr(conditional_on="status"),
+                        "__annotations__": {"id": UINT, "status": UINT, "data": _attr.data_type | None},
+                        "__bool__": (lambda self: self.status == SUCCESS),
+                    },
                 ),
             )
 
-            _field: Field[AttrListItem[T]] = attr(conditional_on="status")
-            _member: tuple[str, type[AttrListItem[T]], Field[AttrListItem[T]]] = ("data", _GetAttrsListItem, _field)
-            members.append(_member)
+            members.append((_attr.name, _GetAttrsListItem))
 
         GetAttrListResp = cast(type[Struct], Struct.create(name="GetAttrListResp", members=members))  # pyright: ignore [reportArgumentType]
 
@@ -357,6 +356,12 @@ class GeneralStatusCodes(StatusEnum):
     member_not_settable = 0x29, "Request was to modify a non-modifiable member"
     dnet_grp2_server_failure = 0x2A, "DeviceNet Group 2 only server general failure"
     unknown_modbus_error = 0x2B, "A Modbus to CIP translator received an unknown Modbus error"
+
+    @classmethod
+    def dict(cls) -> dict[int | None, str]:
+        d = {x._value_: x.description for x in cls}
+        d[None] = "UNKNOWN"
+        return d
 
 
 GENERAL_STATUS_CODES: Final[dict[int, str]] = {s._value_: s.description for s in GeneralStatusCodes}

@@ -25,8 +25,6 @@ class CIPDriver:
             case _:
                 raise ValueError("cannot supply both `path` and `connection`")
 
-        # self._identity: IdentityInstanceAttrs | None = None
-
     @property
     def connection(self) -> CIPConnection:
         return self._connection
@@ -71,7 +69,7 @@ class CIPDriver:
     def identity(self) -> IdentityInstanceAttrs | None:
         try:
             if not (resp := self._connection.get_attributes_all(Identity)):
-                self.__log.error("failed to get identity")
+                self.__log.error(f"failed to get identity for {self.connection.connection_path}")
                 return None
             return cast(IdentityInstanceAttrs, resp.data)
         except Exception:
@@ -85,7 +83,7 @@ class CIPDriver:
         cip_connected: bool = False,
     ) -> Generator[Self, None, None]:
         try:
-            self.__log.info(f"Creating temporary driver with additional route {route!r}...")
+            self.__log.debug(f"Creating temporary driver with additional route {route!r}...")
             cfg = CIPConfig(
                 route=self.connection.config.route / route,
                 connected_config=self.connection.config.connected_config,
@@ -96,7 +94,10 @@ class CIPDriver:
             with self.__class__(connection=conn).open(cip_connected=cip_connected) as driver:
                 yield driver
         finally:
-            self.__log.info("... temporary route driver closed")
+            self.__log.debug("... temporary route driver closed")
+
+    def __str__(self):
+        return f"{self.__class__.__name__} @ {self.connection.connection_path}"
 
 
 def parse_connection_path(path: str) -> tuple[str, int, CIPRoute]:

@@ -4,13 +4,14 @@ from dataclasses import Field, field, fields, make_dataclass
 from inspect import isclass
 from io import BytesIO
 from struct import calcsize, pack, unpack
-from types import EllipsisType, UnionType
+from types import EllipsisType, GenericAlias, UnionType
 from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
     Callable,
     ClassVar,
+    Generator,
     Literal,
     Self,
     Sequence,
@@ -23,6 +24,8 @@ from typing import (
     get_type_hints,
     overload,
 )
+
+from cippy._logging import get_logger
 from cippy.exceptions import BufferEmptyError, DataError
 from cippy.util import DataclassMeta
 
@@ -89,6 +92,7 @@ class DataType[T](metaclass=_DataTypeMeta):
 
     __encoded_value__: bytes = b""
     size: int = 0
+    __log = get_logger(__qualname__)
 
     def __new__(cls, *args, **kwargs):
         if super().__new__ is object.__new__:
@@ -125,7 +129,10 @@ class DataType[T](metaclass=_DataTypeMeta):
         """
         try:
             stream = as_stream(buffer)
-            return cls._decode(stream)
+            value = cls._decode(stream)
+            if isinstance(buffer, bytes) and (leftover := stream.read()):
+                cls.__log.debug(f"leftover data decoding {cls.__name__}: {leftover!r}")
+            return value
         except BufferEmptyError:
             raise
         except Exception as err:
@@ -207,11 +214,14 @@ class ElementaryDataType[T: ElementaryPyType](DataType[T], metaclass=_Elementary
         data = cls._stream_read(stream, cls.size)
         return cls(unpack(cls._format, data)[0])
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"{self.__class__.__name__}({self._base_type.__repr__(self)})"  # noqa # type: ignore
 
+    def __str__(self):
+        return self._base_type.__repr__(self)  # type: ignore
 
-def _process_typehint(typ, _field):
+
+def _process_typehint(typ, _field) -> type[DataType]:
     if isclass(typ) and issubclass(typ, DataType):
         return typ
 
@@ -241,7 +251,7 @@ def _process_typehint(typ, _field):
         # handles 'x: ArrayType[y, z]' case
         field_type = array(*get_args(typ))
 
-    return field_type
+    return cast(type[DataType], field_type)
 
 
 def _process_fields(cls: "_StructMeta") -> ...:
@@ -358,6 +368,7 @@ def attr[T: DataType](
     len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
     size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
     conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
+    fmt: str | None = None,
     **kwargs,
 ) -> Any | T:
     """
@@ -371,7 +382,7 @@ def attr[T: DataType](
           will not be set on the instance automatically and must be done manually in __post_init__.
           Value will be overwritten with decoded value after instance is created using decode()
     reserved: Whether the attribute is reserved. If True, the attribute will not be _user facing_ and implies `init=True`.
-    len_ref: Used for ArrayType attributes whose length is determined by another attribute and used when decoding the
+    len_ref: Used forArray attributes whose length is determined by another attribute and used when decoding the
              struct whole. The attribute should be type hinted as `Array[...]` as well. This parameter must be
              the name of the length attribute or a tuple of the name, a decode function, and an encoded function.
              These functions are 1-arg callables that, for the decode function, receive the value of the length attribute
@@ -408,6 +419,8 @@ def attr[T: DataType](
         if isinstance(conditional_on, str):
             conditional_on = conditional_on, _default_conditional_callable, _default_conditional_callable
     field_kwargs["metadata"]["conditional_on"] = conditional_on
+    if fmt is not None:
+        field_kwargs["metadata"]["fmt"] = fmt
 
     return field(**field_kwargs, **kwargs)
 
@@ -422,7 +435,7 @@ class _StructMeta(DataclassMeta, _DataTypeMeta):
     __struct_size_ref__: tuple[str, Callable[[DataType], int], Callable[[DataType], int]] | None
 
     __parent_struct__: "tuple[Struct, str] | None"
-    __parent_array__: "tuple[ArrayType, int] | None"
+    __parent_array__: "tuple[Array, int] | None"
     __encoded_fields__: dict[str, bytes]
     __initialized__: bool
 
@@ -465,7 +478,7 @@ class Struct(DataType, metaclass=_StructMeta):
         dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
     ]
     #: map of field names to field values and associated descriptions, these
-    __field_descriptions__: ClassVar[dict[str, dict[DataType | None, str]]] = {}
+    __field_descriptions__: ClassVar[dict[str, dict[DataType | int | None, str]]] = {}
 
     def __post_init__(self, *args, **kwargs) -> None:
         for member, typ in self.__struct_members__.items():
@@ -510,7 +523,7 @@ class Struct(DataType, metaclass=_StructMeta):
         self.__initialized__ = False
         return self
 
-    def __class_getitem__(cls, item: ArrayLenT) -> type["ArrayType[type[Self], ArrayLenT]"]:
+    def __class_getitem__(cls, item: ArrayLenT) -> type["Array[Self, ArrayLenT]"]:
         return array(cls, item)
 
     def __setattr__(self, key: str, value: Any) -> None:
@@ -610,27 +623,25 @@ class Struct(DataType, metaclass=_StructMeta):
             try:
                 if len_ref := cls.__struct_array_length_sources__.get(name):
                     ref, decode_func, encode_func = len_ref
-                    typ = cast(type[ArrayType[type[ArrayableT], int]], typ)
+                    typ = cast(type[Array[ArrayableT, int]], typ)
                     length = decode_func(values[ref])
                     if typ is BYTES:
                         _array = BYTES[length]
                     else:
-                        _array = array(typ.element_type, length)
-                    value = _array.decode(stream)
+                        _array = array(typ.element_type, length)  # type: ignore
+                    values[name] = _array.decode(stream)
                 elif conditional_on := cls.__struct_conditional_attributes__.get(name):
                     ref, decode_func, encode_func = conditional_on
                     if decode_func(values[ref]):
-                        value = typ.decode(stream)
+                        values[name] = typ.decode(stream)
                     else:
-                        value = cast(
+                        values[name] = cast(
                             DataType, cls.__struct_dataclass_fields__[name].default
                         )  # could be None too, but idgaf
                 else:
-                    value = typ.decode(stream)
+                    values[name] = typ.decode(stream)
             except Exception as err:
                 raise DataError(f"Error decoding attribute {name!r}, decoded so far: {values}") from err
-            else:
-                values[name] = value
 
         post_init_vars = {name: val for name, val in values.items() if not cls.__struct_dataclass_fields__[name].init}
         init_vars = {k: v for k, v in values.items() if k not in post_init_vars}
@@ -677,10 +688,14 @@ class Struct(DataType, metaclass=_StructMeta):
         for name in self.__struct_members__:
             value = getattr(self, name)
             desc = self.__get_description__(name)
-            if desc:
-                yield f"{name}: {desc!r} = {value!r}"
+            if (fmt := self.__dataclass_fields__[name].metadata.get("fmt")) is not None:
+                str_value = format(value, fmt)
             else:
-                yield f"{name}={value!r}"
+                str_value = repr(value)
+            if desc:
+                yield f"{name}: {desc!r} = {str_value}"
+            else:
+                yield f"{name}={str_value}"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(self.__field_reprs__())})"
@@ -719,34 +734,36 @@ class _ArrayMeta(_DataTypeMeta):
 
 
 # keep a cache of all array types created so each type is only created once
-__ARRAY_TYPE_CACHE__: dict[tuple[type[ArrayableT], ArrayLenT], type["ArrayType"]] = {}
+__ARRAY_TYPE_CACHE__: dict[tuple[type[ArrayableT], ArrayLenT], type["Array[ArrayableT, ArrayLenT]"]] = {}
 
 
-def array[ET: ArrayableT, LT: ArrayLenT](element_type: type[ET], length: LT) -> type["ArrayType[type[ET], LT]"]:
+def array[ET: ArrayableT, LT: ArrayLenT](element_type: type[ET], length: LT) -> type["Array[ET, LT]"]:
     """
     Creates an array type of `length` elements of `element_type`, not for use with `BYTES` type
     """
     _type: type[ET] = element_type
-    _len = length
+    _len: LT = length
     if _len is None:
-        _len = ...
+        _len = ...  # type: ignore
 
     _key = (_type, _len)
     if _key not in __ARRAY_TYPE_CACHE__:
-        klass = type(f"{_type.__name__}Array", (ArrayType,), dict(element_type=_type, length=_len))
+        klass = cast(
+            type[Array[ET, LT]], type(f"{_type.__name__}Array", (Array,), dict(element_type=_type, length=_len))
+        )
         __ARRAY_TYPE_CACHE__[(_type, _len)] = klass
 
-    return cast(type[ArrayType[type[ET], LT]], __ARRAY_TYPE_CACHE__[_key])
+    return cast(type[Array[ET, LT]], __ARRAY_TYPE_CACHE__[_key])
 
     # return Array
 
 
-class ArrayType[ElementT: type[ArrayableT], LenT: ArrayLenT](DataType, metaclass=_ArrayMeta):
+class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_ArrayMeta):
     """
     Base type for an array
     """
 
-    element_type: ElementT
+    element_type: type[ElementT]
     length: LenT
 
     def __new__(cls, *args, **kwargs):
@@ -777,33 +794,41 @@ class ArrayType[ElementT: type[ArrayableT], LenT: ArrayLenT](DataType, metaclass
         else:
             return len(self._array) * self.element_type.size
 
-    def _convert_element(self, value):
-        if not isinstance(value, self.element_type):  # noqa
+    def _convert_element(self, value) -> ElementT:
+        if not isinstance(value, self.element_type):
             try:
-                val = self.element_type(value)  # pyright: ignore [reportCallIssue]
+                val: ElementT = self.element_type(value)  # type: ignore
             except Exception as err:
                 raise DataError("Error converting element:") from err
         else:
-            val = value
+            val = cast(ElementT, value)
         return val
+
+    def __iter__(self) -> Generator[ElementT, None, None]:
+        yield from self._array
+
+    def __reversed__(self) -> Generator[ElementT, None, None]:
+        yield from reversed(self._array)
 
     def __hash__(self):
         return hash((self.length, self.element_type, self._array))
+
+    def __contains__(self, item):
+        return item in self._array
 
     def __len__(self) -> int:
         return len(self._array)
 
     @overload
-    def __getitem__(self, item: int) -> ArrayableT: ...
+    def __getitem__(self, item: int) -> ElementT: ...
 
     @overload
-    def __getitem__(self, item: slice) -> "ArrayType[type[ArrayableT], int]": ...
+    def __getitem__(self, item: slice) -> "Array[ElementT, int]": ...
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: slice | int) -> "Array[ElementT, int] | ElementT":
         if isinstance(item, slice):
             items = self._array[item]
-            return array(self.element_type, len(items))(items)
-
+            return cast(Array[ElementT, int], array(self.element_type, len(items))(items))
         return self._array[item]
 
     def __setitem__(self, item: int | slice, value) -> None:
@@ -876,19 +901,30 @@ class ArrayType[ElementT: type[ArrayableT], LenT: ArrayLenT](DataType, metaclass
         return f"{self.__class__!r}({self._array!r})"
 
 
-class Array[ET: ArrayableT, LT: ArrayLenT](Sequence[ET]):
+class Array[ET: ArrayableT, LT: ArrayLenT](ArrayType[ET, LT]):
     """
     for use in type annontations only, ArrayType is the actual base class for arrays
     """
 
-    def __class_getitem__(cls, item: type[ET] | tuple[type[ET], LT]) -> type[ArrayType[type[ET], LT]]:
-        element_type: type[ET]
-        len_type: LT
+    def __class_getitem__(cls, item):
         if isinstance(item, tuple):
             element_type, len_type = item
         else:
             element_type, len_type = item, ...  # type: ignore
-        return array(element_type, len_type)
+
+        if (
+            isclass(element_type)
+            and issubclass(element_type, DataType)
+            and (
+                len_type in (None, ...)
+                or isinstance(len_type, int)
+                or (isclass(len_type) and issubclass(len_type, int))
+            )
+        ):
+            element_type: type[ET]
+            len_type: LT
+            return array(element_type, len_type)  # type: ignore
+        return GenericAlias(Array, (element_type, len_type))
 
 
 __BYTES_TYPE_CACHE__: dict[tuple[int, type[ElementaryDataType[int]] | None], type["BYTES"]] = {}

@@ -38,11 +38,9 @@ class CIPRoute(UserList):
                 new_segments = (other,)
             case str():
                 new_segments = self._str_to_port_segments(other)
-            case (str(), int() | str() | bytes()):
-                _port, link = other
-                if _port.lower() not in PORT_ALIASES:
-                    raise DataError(f"invalid port alias: {_port!r}")
-                new_segments = (PortSegment(PORT_ALIASES[_port.lower()], link),)
+            case (int() | PortIdentifier() | str(), int() | str() | bytes()):
+                port, link = other
+                new_segments = (PortSegment(port, link),)
             case CIPRoute():
                 new_segments = other.data
             case EPATH():
@@ -87,3 +85,6 @@ class CIPRoute(UserList):
             raise DataError(f"route must be pairs of port and link, odd number of segments: {_split_route}")
         _pairs = [(_split_route[i], _split_route[i + 1]) for i in range(0, len(_split_route), 2)]
         return [PortSegment(port, link) for port, link in _pairs]
+
+    def __str__(self):
+        return "/".join(f"{s.port!s}/{s.link_address}" for s in self.data)
