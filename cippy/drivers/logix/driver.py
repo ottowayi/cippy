@@ -1,13 +1,9 @@
-import logging
-
-from cippy.drivers import CIPDriver
-from cippy.drivers.cip.driver import parse_connection_path
-from cippy.protocols.cip import CIPConnection, CIPConfig, CIPRoute
-from cippy.protocols.cip.object_library import Identity, IdentityInstanceAttrs, identity
-from cippy.protocols.ethernetip import EIPConnection, EIPConfig
-from cippy.data_types import PortIdentifier
-from cippy.exceptions import DriverError
 from cippy._logging import get_logger
+from cippy.const import DeviceTypes
+from cippy.data_types import PortIdentifier
+from cippy.drivers import CIPDriver
+from cippy.exceptions import DriverError
+from cippy.protocols.cip import CIPConnection
 
 
 class LogixDriver(CIPDriver):
@@ -25,7 +21,7 @@ class LogixDriver(CIPDriver):
         try:
             self.__log.info(f"locating plc for device: {path}")
             with CIPDriver(path) as driver:
-                if driver.identity and driver.identity.device_type == Identity.DeviceTypes.plc:
+                if driver.identity and driver.identity.device_type == DeviceTypes.plc:
                     self.__log.info(f"device is a plc: {driver.identity}")
                     return path
                 for i in range(17):  # probably a reasonable max chassis size
@@ -35,7 +31,7 @@ class LogixDriver(CIPDriver):
                             if _driver.identity is None:
                                 self.__log.info(f"... failed to get identity of slot {i}")
                                 continue
-                            if _driver.identity.device_type == Identity.DeviceTypes.plc:  # type: ignore - any exception is ok
+                            if _driver.identity.device_type == DeviceTypes.plc:  # type: ignore - any exception is ok
                                 self.__log.info(f"... found plc: {_driver.identity}")
                                 return f"{path}/{PortIdentifier.backplane}/{i}"
                             else:

@@ -50,6 +50,7 @@ class IntEnumX(IntEnum):
 class _PredefinedMeta[T](type):
     __value_lookup__: dict[T, str]
     __name_lookup__: dict[str, T]
+    __default_name__: str | None = None
 
     def __new__(mcs, name, bases, clsdict, **kwargs):
         cls = super().__new__(mcs, name, bases, clsdict)
@@ -68,8 +69,15 @@ class _PredefinedMeta[T](type):
         cls.__value_lookup__ = {v: k for k, v in lookup.items()}
         return cls
 
-    def get_name(cls, value) -> str | None:
-        return cls.__value_lookup__.get(value, None)
+    @overload
+    def get(cls, x: T) -> str: ...
+    @overload
+    def get(cls, x: str) -> T: ...
+    def get(cls, x: T | str, use_default: bool = True) -> str | T | None:
+        return cls.__value_lookup__.get(x, cls.__name_lookup__.get(x, cls.__default_name__ if use_default else None))  # type: ignore
+
+    def get_name(cls, value, use_default: bool = True) -> str | None:
+        return cls.__value_lookup__.get(value, cls.__default_name__ if use_default else None)
 
     def __contains__(cls, value) -> bool:
         return value in (cls.__value_lookup__ | cls.__name_lookup__)
@@ -102,5 +110,7 @@ class _PredefinedMeta[T](type):
 
 
 class PredefinedValues(metaclass=_PredefinedMeta):
+    __default_name__: str | None = None
+
     def __new__(cls, *args, **kwargs):
         raise TypeError("Cannot instantiate a PredefinedValues class")

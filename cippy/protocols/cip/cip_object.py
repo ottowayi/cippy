@@ -1,24 +1,12 @@
-from ast import Str
 from dataclasses import Field, dataclass, field, replace
 from inspect import isclass
-from typing import (
-    Callable,
-    ClassVar,
-    Final,
-    Literal,
-    Protocol,
-    Sequence,
-    cast,
-)
+from typing import Callable, ClassVar, Final, Literal, Protocol, Sequence, cast
 
-from cippy.data_types import BYTES, UINT, DataType, Struct, attr
-from cippy.data_types.numeric import USINT
-from cippy.util import PredefinedValues
-from cippy.util import StatusEnum
+from cippy.data_types import BYTES, UINT, USINT, DataType, Struct, attr
+from cippy.util import PredefinedValues, StatusEnum
 
-from .msg_router_services import MessageRouterRequest, MsgRouterResponseParser
 from ._base import SUCCESS, CIPRequest, CIPResponseParser
-from functools import wraps
+from .msg_router_services import MessageRouterRequest, MsgRouterResponseParser
 
 
 @dataclass

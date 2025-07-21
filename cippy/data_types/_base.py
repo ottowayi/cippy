@@ -27,7 +27,7 @@ from typing import (
 
 from cippy._logging import get_logger
 from cippy.exceptions import BufferEmptyError, DataError
-from cippy.util import DataclassMeta
+from cippy.util import DataclassMeta, PredefinedValues
 
 if TYPE_CHECKING:
     from .cip import CIPSegment
@@ -478,7 +478,7 @@ class Struct(DataType, metaclass=_StructMeta):
         dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
     ]
     #: map of field names to field values and associated descriptions, these
-    __field_descriptions__: ClassVar[dict[str, dict[DataType | int | None, str]]] = {}
+    __field_descriptions__: ClassVar[dict[str, dict[DataType | int | None, str] | type[PredefinedValues]]] = {}
 
     def __post_init__(self, *args, **kwargs) -> None:
         for member, typ in self.__struct_members__.items():

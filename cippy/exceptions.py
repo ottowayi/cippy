@@ -1,10 +1,10 @@
-class PycommError(Exception):
+class CippyError(Exception):
     """
     Base exception for all exceptions raised by cippy
     """
 
 
-class DataError(PycommError):
+class DataError(CippyError):
     """
     For exceptions raised during binary encoding/decoding of data
     """
@@ -16,7 +16,7 @@ class BufferEmptyError(DataError):
     """
 
 
-class ResponseError(PycommError):
+class ResponseError(CippyError):
     """
     For exceptions raised during handling for responses to requests
     """
@@ -26,7 +26,13 @@ class ResponseError(PycommError):
         self.response = response
 
 
-class RequestError(PycommError):
+class RequestError(CippyError):
     """
     For exceptions raised due to issues building requests or processing of user supplied data
+    """
+
+
+class DriverError(CippyError):
+    """
+    Generic error type for issues with the driver
     """
