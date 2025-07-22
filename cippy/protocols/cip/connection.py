@@ -2,26 +2,26 @@ from dataclasses import dataclass, field
 from functools import wraps
 from os import urandom
 from typing import Final, Generator, Literal, Sequence, cast
-from typing_extensions import overload
 
 from cippy import get_logger
 from cippy.data_types import (
+    BYTES,
     DWORD,
     UDINT,
     UINT,
     USINT,
     WORD,
     DataType,
-    Struct,
-    BYTES,
     LogicalSegment,
     LogicalSegmentType,
+    Struct,
 )
 from cippy.exceptions import ResponseError
 from cippy.util import cycle
 
 from ..connection import is_connected
 from ..ethernetip import EIPConnection
+from ._base import CIPRequest, CIPResponse
 from .cip_object import CIPAttribute, CIPObject
 from .cip_route import CIPRoute
 from .object_library.connection_manager import (
@@ -39,7 +39,6 @@ from .object_library.connection_manager import (
     UnconnectedSendFailedResponse,
 )
 from .object_library.message_router import MessageRouter
-from ._base import CIPRequest, CIPResponse
 
 STANDARD_CONNECTION_SIZE: Final[int] = 511
 LARGE_CONNECTION_SIZE: Final[int] = 4000
@@ -131,25 +130,18 @@ class CIPConnection:
         cip_connected: bool | None = None,
     ) -> CIPResponse[TCls | TIns | BYTES] | CIPResponse[TCls | TIns | BYTES | UnconnectedSendFailedResponse]:
         request = cip_object.get_attributes_all(instance=instance)
-        if resp := self.send(request, cip_connected=cip_connected):
-            ...
-
+        resp = self.send(request, cip_connected=cip_connected)
         return resp
 
-    def _get_attributes_all_individually(
-        self,
-        cip_object: type[CIPObject],
-    ): ...
-
     def get_attribute_single[T: DataType](
-        self, attribute: CIPAttribute[T], instance: int = 1, cip_connected: bool | None = None
+        self, attribute: CIPAttribute[T], instance: int | None = 1, cip_connected: bool | None = None
     ):
         request = attribute.object.get_attribute_single(attribute=attribute, instance=instance)
         resp = self.send(request, cip_connected=cip_connected)
         return resp
 
     def get_attribute_list(
-        self, attributes: Sequence[CIPAttribute], instance: int = 1, cip_connected: bool | None = None
+        self, attributes: Sequence[CIPAttribute], instance: int | None = 1, cip_connected: bool | None = None
     ):
         if len({a.object for a in attributes}) != 1:
             raise ValueError("attributes must all be from the same object")

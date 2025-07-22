@@ -3,7 +3,9 @@ from functools import cached_property
 from typing import Generator, Self, cast
 
 from cippy._logging import get_logger
+from cippy.data_types import Struct
 from cippy.protocols.cip import CIPConfig, CIPConnection, CIPRoute
+from cippy.protocols.cip.cip_object import CIPObject
 from cippy.protocols.cip.object_library.identity import Identity, IdentityInstanceAttrs
 from cippy.protocols.ethernetip import ETHERNETIP_PORT, EIPConfig, EIPConnection
 
@@ -98,6 +100,57 @@ class CIPDriver:
 
     def __str__(self):
         return f"{self.__class__.__name__} @ {self.connection.connection_path}"
+
+    def read_object[T: Struct, FT: Struct](
+        self, cip_object: type[CIPObject[T, FT]], instance: int | None = CIPObject.Instance.DEFAULT
+    ) -> T | None:
+        self.__log.info(f"reading object {cip_object} ({instance=})...")
+
+        try:
+            if resp := self.connection.get_attributes_all(cip_object, instance):
+                value = cast(T, resp.data)
+
+                self.__log.info(f"... success: {value}")
+                return value
+            self.__log.info(f"...failed to read object {cip_object} with get_attributes_all: {resp.status_message}")
+            try:
+                resp_type = (
+                    cip_object._svc_get_attrs_all_class_type  # type: ignore
+                    if not instance
+                    else cip_object._svc_get_attrs_all_instance_type  # type: ignore
+                )
+                obj_attrs = {a.name: a for a in cip_object.__cip_attributes__.values()}
+                attrs_by_id = {a.id: a for a in cip_object.__cip_attributes__.values()}
+                attrs = [obj_attrs[a] for a in resp_type.__struct_attributes__]
+            except KeyError as err:
+                self.__log.error(f"...invalid get_attributes_all response type, cip object missing attribute: {err}")
+                return None
+
+            values = {}
+            self.__log.info(f"...attempting to read object {cip_object} ({instance=}) with get_attribute_list...")
+            if list_resp := self.connection.get_attribute_list(attrs, instance):
+                for attr in attrs:  # type: ignore
+                    attr_resp = getattr(list_resp.data, attr.name)
+                    values[attr.name] = None if attr_resp.status else attr_resp.data
+            else:
+                self.__log.info("...get_attribute_list failed, trying get_attribute_single reads...")
+                for attr in attrs:
+                    self.__log.info(f" ...reading {attr.name!r}...")
+                    if resp := self.connection.get_attribute_single(attr, instance):
+                        values[attr.name] = resp.data
+                        self.__log.info(f" ... success: {resp.data}")
+                    else:
+                        self.__log.info(f"... failed to read {attr.name}: {resp.status_message}")
+                        values[attr.name] = None
+            if any(failed_attrs := [k for k, v in values.items() if v is None]):
+                self.__log.info(f"... failed to read attributes from object: {', '.join(failed_attrs)}")
+                return None
+            else:
+                value = cast(T, resp_type(**values))
+                self.__log.info(f"... success: {value}")
+                return value
+        except Exception:
+            self.__log.exception(f"unhandled exception trying to read object {cip_object}")
 
 
 def parse_connection_path(path: str) -> tuple[str, int, CIPRoute]:

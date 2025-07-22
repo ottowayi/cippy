@@ -50,10 +50,11 @@ class _MetaCIPObject(type):
     # keeps track of object classes by class code
     __cip_objects__: ClassVar[dict[int, "type[CIPObject]"]] = {}
     __cip_services__: dict[USINT, _CIPService]
-    __cip_attributes__: dict[int, "type[CIPAttribute]"]
+    __cip_attributes__: dict[int, CIPAttribute]
 
     _svc_get_attrs_all_instance_type = UnsupportedGetAttrsAll
     _svc_get_attrs_all_class_type = StandardClassAttrs
+    class_code: int = 0
 
     def __new__(cls, name, bases, classdict):
         klass = super().__new__(cls, name, bases, classdict)
@@ -85,6 +86,9 @@ class _MetaCIPObject(type):
 
     def __repr__(cls):
         return cls.__name__
+
+    def __str__(cls):
+        return f"{cls.__name__} ({cls.class_code:#04x})"
 
 
 def service(id: USINT):
