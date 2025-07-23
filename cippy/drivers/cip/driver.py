@@ -120,7 +120,6 @@ class CIPDriver:
                     else cip_object._svc_get_attrs_all_instance_type  # type: ignore
                 )
                 obj_attrs = {a.name: a for a in cip_object.__cip_attributes__.values()}
-                attrs_by_id = {a.id: a for a in cip_object.__cip_attributes__.values()}
                 attrs = [obj_attrs[a] for a in resp_type.__struct_attributes__]
             except KeyError as err:
                 self.__log.error(f"...invalid get_attributes_all response type, cip object missing attribute: {err}")

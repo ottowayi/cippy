@@ -28,6 +28,9 @@ class CIPRoute(UserList):
 
         super().__init__(segments)
 
+    def __bool__(self):
+        return bool(self.data)
+
     def __truediv__(
         self,
         other: "PortSegment | tuple[int | PortIdentifier | str, int | str | bytes] | EPATH | CIPRoute | str",

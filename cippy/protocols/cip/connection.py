@@ -129,26 +129,40 @@ class CIPConnection:
         instance: int | None = 1,
         cip_connected: bool | None = None,
     ) -> CIPResponse[TCls | TIns | BYTES] | CIPResponse[TCls | TIns | BYTES | UnconnectedSendFailedResponse]:
+        self.__log.info(f"sending get_attributes_all request for {cip_object}...")
         request = cip_object.get_attributes_all(instance=instance)
-        resp = self.send(request, cip_connected=cip_connected)
-        return resp
+        if response := self.send(request, cip_connected=cip_connected):
+            self.__log.info(f"... success: {response.data=}")
+        else:
+            self.__log.error(f"get_attributes_all for {cip_object} failed: {response.status_message}")
+
+        return response
 
     def get_attribute_single[T: DataType](
         self, attribute: CIPAttribute[T], instance: int | None = 1, cip_connected: bool | None = None
     ):
+        self.__log.info("sending get_attribute_single request for %s ...", attribute)
         request = attribute.object.get_attribute_single(attribute=attribute, instance=instance)
-        resp = self.send(request, cip_connected=cip_connected)
-        return resp
+
+        if response := self.send(request, cip_connected=cip_connected):
+            self.__log.info("... success: response.data=%s", response.data)
+        else:
+            self.__log.error("get_attribute_single for %s failed: %s", attribute, response.status_message)
+        return response
 
     def get_attribute_list(
         self, attributes: Sequence[CIPAttribute], instance: int | None = 1, cip_connected: bool | None = None
     ):
+        self.__log.info(f"sending get_attribute_list request for {attributes}...")
         if len({a.object for a in attributes}) != 1:
             raise ValueError("attributes must all be from the same object")
 
         request = attributes[0].object.get_attribute_list(attributes=attributes, instance=instance)
-        resp = self.send(request, cip_connected=cip_connected)
-        return resp
+        if response := self.send(request, cip_connected=cip_connected):
+            self.__log.info(f"... success: {response.data=}")
+        else:
+            self.__log.error(f"get_attribute_list for {attributes} failed: {response.status_message}")
+        return response
 
     def connect(self):
         if self.connected:
@@ -250,25 +264,33 @@ class CIPConnection:
         cip_path: CIPRoute | None = None,
     ):
         _path = cip_path if cip_path is not None else p if (p := self.config.route) is not None else CIPRoute()
-        request = ConnectionManager.unconnected_send(
-            msg=msg,
-            route_path=_path,
-            tick_time=(config.tick_time if config is not None else self.config.unconnected_config.tick_time),
-            num_ticks=(config.num_ticks if config is not None else self.config.unconnected_config.num_ticks),
-        )
+        self.__log.info("sending unconnected request: %s ...", msg)
 
-        self.__log.debug("sending unconnected_send request: %s", request)
+        if _path:
+            self.__log.debug("... using unconnected_send to send to %s", _path)
+            request = ConnectionManager.unconnected_send(
+                msg=msg,
+                route_path=_path,
+                tick_time=(config.tick_time if config is not None else self.config.unconnected_config.tick_time),
+                num_ticks=(config.num_ticks if config is not None else self.config.unconnected_config.num_ticks),
+            )
+            self.__log.debug("... unconnected_send request: %s", request)
+        else:
+            request = msg
+
         if enip_resp := self._transport.send_rr_data(msg=bytes(request.message)):
-            self.__log.debug("parsing unconnected_send response: %s", enip_resp.data.packet.data.data)
-            resp = request.response_parser.parse(enip_resp.data.packet.data.data, request)
-            self.__log.debug("parsed unconnected_send response: %s", resp)
-            return resp
+            self.__log.debug("parsing unconnected response: %s", enip_resp.data.packet.data.data)
+            if response := request.response_parser.parse(enip_resp.data.packet.data.data, request):  # type: ignore
+                self.__log.info("... success: response.data=%s", response.data)
+            else:
+                self.__log.error("unconnected send failed: %s", response)
+            return response
         else:
             raise ResponseError("ethernet/ip response error", enip_resp)
 
     @is_cip_connected
     def _connected_send[T: DataType](self, request: CIPRequest[T]) -> CIPResponse[T]:
-        self.__log.debug("sending connected request: %s", request)
+        self.__log.info("sending connected request: %s ...", request)
         encoded_msg = bytes(request.message)
         if has_seq_id := (0 < self.config.connected_config.transport_class <= 3):
             sequence_number = UINT(next(self._sequence_generator))
@@ -282,9 +304,11 @@ class CIPConnection:
                 resp_seq_id = UINT.decode(resp_data)
                 self.__log.verbose("response sequence number: %d", resp_seq_id)
                 resp_data = resp_data[UINT.size :]
-            resp = request.response_parser.parse(resp_data, request)
-            self.__log.debug("parsed connected response: %s", resp)
-            return resp
+            if response := request.response_parser.parse(resp_data, request):
+                self.__log.info("... success: response.data=%s", response.data)
+            else:
+                self.__log.error("connected send failed: %s", response)
+            return response
         else:
             raise ResponseError("ethernet/ip response error", enip_resp)
 
