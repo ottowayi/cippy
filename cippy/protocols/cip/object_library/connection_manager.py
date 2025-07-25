@@ -295,7 +295,9 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
             msg = f"({header.general_status:#04x}) {general_msg}: {ext_msg}" if ext_msg else general_msg
             self.__log.debug("decoded unconnected send response data: %r", msg_data)
 
-        return CIPResponse(request=request, message=header, data=msg_data, status_message=msg)
+        return CIPResponse(
+            request=request, message=header, data=msg_data, status_message=msg, success_statuses=self.success_statuses
+        )
 
 
 # def _bit_count(arr:Array[BOOL, int] ) -> int:
@@ -489,7 +491,10 @@ class ConnectionManager(CIPObject):
                     num_ticks=num_ticks,
                 ),
             ),
-            response_parser=UnconnectedSendResponseParser(response_type=msg.response_parser.response_type),
+            response_parser=UnconnectedSendResponseParser(
+                response_type=msg.response_parser.response_type,
+                success_statuses=msg.response_parser.success_statuses,  # type: ignore
+            ),
         )
 
     class Instance(CIPObject.Instance):

@@ -84,7 +84,7 @@ class MsgRouterResponseParser[TR: DataType, TF: DataType]:
     __log = get_logger(__qualname__)
     response_type: type[TR]
     failed_response_type: type[TF]
-    success_statuses: set[USINT] = field(default_factory=lambda: {SUCCESS})
+    success_statuses: set[USINT | int] = field(default_factory=lambda: {SUCCESS})
 
     def parse(self, data: BYTES, request: CIPRequest[TR | TF]) -> CIPResponse[TR | TF]:
         resp = MessageRouterResponse.decode(data)
@@ -97,14 +97,16 @@ class MsgRouterResponseParser[TR: DataType, TF: DataType]:
             general_msg, ext_msg = cip_object_from_path(request.message.path).get_status_messages(
                 service=request.message.service,
                 status=resp.general_status,
-                ext_status=resp.additional_status,
+                ext_status=[a for a in resp.additional_status],
                 extra_data=resp_data,
             )
 
             msg = f"{general_msg}({resp.general_status:#04x}): {ext_msg}" if ext_msg else general_msg
 
         self.__log.debug("decoded message router response data: %r", resp_data)
-        return CIPResponse(request=request, message=resp, data=resp_data, status_message=msg)
+        return CIPResponse(
+            request=request, message=resp, data=resp_data, status_message=msg, success_statuses=self.success_statuses
+        )
 
     def _parse_response_data(self, data: BYTES) -> TR:
         return self.response_type.decode(data)
@@ -124,7 +126,7 @@ def message_router_service[TReq: DataType, TResp: DataType, TFResp: DataType](
     response_type: type[TResp],
     failed_response_type: type[TFResp] = BYTES,
     response_parser: CIPResponseParser[TResp | TFResp] | None = None,
-    success_statuses: set[USINT] | None = None,
+    success_statuses: set[USINT | int] | None = None,
 ) -> CIPRequest[TResp | TFResp]:
     if request_type is not None and request_data is None:
         raise DataError("this service requires request `data`")
