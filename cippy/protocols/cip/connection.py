@@ -264,7 +264,7 @@ class CIPConnection:
         cip_path: CIPRoute | None = None,
     ):
         _path = cip_path if cip_path is not None else p if (p := self.config.route) is not None else CIPRoute()
-        self.__log.info("sending unconnected request: %s ...", msg)
+        self.__log.debug("sending unconnected request: %s ...", msg)
 
         if _path:
             self.__log.debug("... using unconnected_send to send to %s", _path)
@@ -281,16 +281,16 @@ class CIPConnection:
         if enip_resp := self._transport.send_rr_data(msg=bytes(request.message)):
             self.__log.debug("parsing unconnected response: %s", enip_resp.data.packet.data.data)
             if response := request.response_parser.parse(enip_resp.data.packet.data.data, request):  # type: ignore
-                self.__log.info("... success: response.data=%s", response.data)
+                self.__log.debug("... success: response.data=%s", response.data)
             else:
-                self.__log.error("unconnected send failed: %s", response)
+                self.__log.debug("unconnected send failed: %s", response)
             return response
         else:
             raise ResponseError("ethernet/ip response error", enip_resp)
 
     @is_cip_connected
     def _connected_send[T: DataType](self, request: CIPRequest[T]) -> CIPResponse[T]:
-        self.__log.info("sending connected request: %s ...", request)
+        self.__log.debug("sending connected request: %s ...", request)
         encoded_msg = bytes(request.message)
         if has_seq_id := (0 < self.config.connected_config.transport_class <= 3):
             sequence_number = UINT(next(self._sequence_generator))
@@ -305,7 +305,7 @@ class CIPConnection:
                 self.__log.verbose("response sequence number: %d", resp_seq_id)
                 resp_data = resp_data[UINT.size :]
             if response := request.response_parser.parse(resp_data, request):
-                self.__log.info("... success: response.data=%s", response.data)
+                self.__log.debug("... success: response.data=%s", response.data)
             else:
                 self.__log.error("connected send failed: %s", response)
             return response
