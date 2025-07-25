@@ -781,7 +781,7 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
                 if val_len != self.length:
                     raise DataError(f"Array length error: expected {self.length} items, received {len(value)}")
 
-        self._array = [self._convert_element(v) for v in value]
+        self._array: list[ElementT] = [self._convert_element(v) for v in value]
         if issubclass(self.element_type, Struct):
             for i, obj in enumerate(self._array):
                 obj.__parent_array__ = (self, i)  # type: ignore
@@ -865,28 +865,28 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
         return encoded_elements
 
     @classmethod
-    def _decode_all(cls, stream: BytesIO) -> list[ElementT]:
+    def _decode_all(cls, stream: BytesIO, *args, **kwargs) -> list[ElementT]:
         _array = []
         while True:
             try:
-                _array.append(cls.element_type.decode(stream))
+                _array.append(cls.element_type.decode(stream, *args, **kwargs))
             except BufferEmptyError:
                 break
         return _array
 
     @classmethod
-    def decode(cls, buffer: BufferT) -> Self:
+    def decode(cls, buffer: BufferT, *args, **kwargs) -> Self:
         try:
             stream = as_stream(buffer)
             if cls.length in {None, Ellipsis}:
-                return cls(cls._decode_all(stream))
+                return cls(cls._decode_all(stream, *args, **kwargs))
 
             if isclass(cls.length) and issubclass(cls.length, ElementaryDataType):
                 _len = cls.length.decode(stream)
             else:
                 _len = cls.length
 
-            _val = [cls.element_type.decode(stream) for _ in range(cast(int, _len))]
+            _val = [cls.element_type.decode(stream, *args, **kwargs) for _ in range(cast(int, _len))]
 
             return cls(_val)
         except Exception as err:

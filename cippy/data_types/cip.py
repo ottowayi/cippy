@@ -8,7 +8,7 @@ from typing import ClassVar, Generator, Self, Sequence, cast
 from cippy.exceptions import BufferEmptyError, DataError
 from cippy.util import IntEnumX
 
-from ._base import BYTES, BufferT, DataType, as_stream, buff_repr
+from ._base import BYTES, BufferT, DataType, as_stream, buff_repr, array
 from .numeric import UDINT, UINT, USINT
 from .string import SHORT_STRING
 
@@ -598,16 +598,15 @@ class DataSegment(CIPSegment):
         self._type = DataSegmentType.simple if isinstance(self.data, bytes) else DataSegmentType.ansi_extended
 
     @classmethod
-    def _encode(cls, value: "DataSegment", *args, **kwargs) -> bytes:
+    def _encode(cls, value: "DataSegment", padded: bool = False, *args, **kwargs) -> bytes:
         segment_type = cls.segment_type | value._type
 
         if value._type == DataSegmentType.simple:
             data = bytes(USINT(len(value.data) // 2)) + value.data  # type: ignore
         else:
             data = bytes(SHORT_STRING(value.data))
-
-        if len(data) % 2:
-            data += b"\x00"
+            if padded and len(value.data) % 2:
+                data += b"\x00"
 
         return bytes(USINT(segment_type)) + data
 
@@ -648,7 +647,7 @@ class EPATH[T: CIPSegment](DataType):
     def _encode(cls, value: "EPATH[T]", *args, **kwargs) -> bytes:
         path = b"".join(segment.encode(segment, padded=cls.padded) for segment in value.segments)
         if cls.with_len:
-            _len = USINT.encode(len(value.segments))
+            _len = USINT.encode(len(path) // 2)
             if cls.pad_len:
                 _len += b"\x00"
             path = _len + path
@@ -660,24 +659,14 @@ class EPATH[T: CIPSegment](DataType):
             _len = USINT.decode(stream)
             if cls.pad_len:
                 _ = USINT.decode(stream)
+            ary_type = array(CIPSegment, _len)
+        elif cls.length is None:
+            ary_type = array(CIPSegment, None)
         else:
-            _len = cls.length
+            ary_type = array(CIPSegment, cls.length)
 
-        segments: list[T] = []
-        if _len is None:
-            while True:
-                try:
-                    segments.append(CIPSegment.decode(stream, padded=cls.padded))  # type: ignore
-                except BufferEmptyError:
-                    break
-        else:
-            for i in range(_len):
-                try:
-                    segments.append(CIPSegment.decode(stream, padded=cls.padded))  # type: ignore
-                except BufferEmptyError:
-                    break
-
-        return cls(segments)
+        segments = [s for s in ary_type.decode(stream, padded=cls.padded)]
+        return cls(segments)  # type: ignore
 
     def __truediv__(self, other: T | Sequence[T]) -> Self:
         new_segments: list[T] = [other] if isinstance(other, CIPSegment) else [o for o in other]
