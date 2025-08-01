@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import pytest
 
-from cippy.data_types import SHORT_STRING, STRING, STRING2, STRINGI, STRINGN, UINT, USINT
+from cippy.data_types import SHORT_STRING, STRING, STRING2, STRINGI, STRINGN, UINT, USINT, CSTRING, array
 from cippy.exceptions import DataError
 
 str_maxes = [
@@ -154,3 +152,13 @@ def test_stringi(
     decoded = STRINGI.decode(bytes(_str))
     assert decoded == _str
     assert decoded._strs[0] == STRINGI.istr(*strings[0])
+
+
+def test_cstring():
+    assert CSTRING("abc") == "abc"
+    assert CSTRING("abc") != "abc\x00"
+    assert bytes(CSTRING("abc")) == b"abc\x00"
+    assert CSTRING.decode(b"abc\x00") == "abc"
+
+    assert array(CSTRING, ...).decode(b"a\x00b\x00c\x00") == CSTRING[3](["a", "b", "c"])
+    assert bytes(CSTRING[3](["a", "b", "c"])) == b"a\x00b\x00c\x00"

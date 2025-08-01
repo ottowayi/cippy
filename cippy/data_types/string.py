@@ -1,16 +1,17 @@
 from __future__ import annotations
+
 import reprlib
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from io import BytesIO
-from typing import Generic, TypeVar
+from typing import Self
 
 from ..exceptions import BufferEmptyError, DataError
 from ._base import BufferT, DataType, ElementaryDataType, _ElementaryDataTypeMeta, as_stream, buff_repr
 from ._core_types import StringDataType
 from .numeric import UDINT, UINT, USINT
 
-__all__ = ("LOGIX_STRING", "STRING", "STRING2", "STRINGN", "STRINGI", "SHORT_STRING")
+__all__ = ("LOGIX_STRING", "STRING", "STRING2", "STRINGN", "STRINGI", "SHORT_STRING", "CSTRING")
 
 
 class LOGIX_STRING(StringDataType):  # noqa
@@ -110,10 +111,7 @@ class SHORT_STRING(StringDataType):  # noqa
     len_type = USINT
 
 
-T = TypeVar("T")
-
-
-class _StringIBase(DataType, Generic[T]):
+class _StringIBase[T](DataType[T]):
     _format = ""
     _codes = ElementaryDataType._codes  # noqa
 
@@ -266,3 +264,24 @@ class StrI:
             raise DataError(f"CharSets utf-16 and utf-32 are not supported for {self.str_type.__name__}")
         elif self.str_type is STRING2:
             raise DataError("Only CharSet utf-16 is supported for STRING2")
+
+
+class CSTRING(StringDataType):
+    @classmethod
+    def _encode(cls, value: str, *args, **kwargs) -> bytes:
+        return value.encode(cls.encoding) + b"\x00"
+
+    @classmethod
+    def _decode(cls, stream: BytesIO) -> Self:
+        if len(stream.getvalue()) == stream.tell():
+            raise BufferEmptyError()
+
+        str_len = stream.getvalue()[stream.tell() :].find(b"\x00")
+        if str_len == -1:
+            raise DataError("null byte not found")
+        if str_len == 0:
+            return cls("")
+
+        str_data = cls._stream_read(stream, str_len)
+        cls._stream_read(stream, 1)
+        return cls(str_data.decode(cls.encoding))
