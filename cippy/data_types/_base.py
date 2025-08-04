@@ -640,6 +640,8 @@ class Struct(DataType, metaclass=_StructMeta):
                         )  # could be None too, but idgaf
                 else:
                     values[name] = typ.decode(stream)
+            except BufferEmptyError:
+                raise
             except Exception as err:
                 raise DataError(f"Error decoding attribute {name!r}, decoded so far: {values}") from err
 
