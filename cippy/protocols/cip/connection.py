@@ -301,7 +301,7 @@ class CIPConnection:
             self.__log.debug("parsing connected response: %s", enip_resp.data.packet.data.data)
             resp_data = enip_resp.data.packet.data.data
             if has_seq_id:
-                resp_seq_id = UINT.decode(resp_data)
+                resp_seq_id = UINT.decode(resp_data[: UINT.size])
                 self.__log.verbose("response sequence number: %d", resp_seq_id)
                 resp_data = resp_data[UINT.size :]
             if response := request.response_parser.parse(resp_data, request):
