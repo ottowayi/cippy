@@ -122,17 +122,11 @@ def message_router_service[TReq: DataType, TResp: DataType, TFResp: DataType](
     instance: int | None = 1,
     attribute: "CIPAttribute | None" = None,
     request_data: TReq | None = None,
-    request_type: type[TReq],
     response_type: type[TResp],
     failed_response_type: type[TFResp] = BYTES,
     response_parser: CIPResponseParser[TResp | TFResp] | None = None,
     success_statuses: set[USINT | int] | None = None,
 ) -> CIPRequest[TResp | TFResp]:
-    if request_type is not None and request_data is None:
-        raise DataError("this service requires request `data`")
-    if request_type is None and request_data is not None:
-        raise DataError("this service does not accept request `data`")
-
     attr_id = None if attribute is None else attribute.id
 
     parser = response_parser or MsgRouterResponseParser(

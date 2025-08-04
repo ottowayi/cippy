@@ -45,7 +45,6 @@ class MessageRouter(CIPObject[MessageRouterInstanceAttrs, StandardClassAttrs]):
             class_code=cls.class_code,
             instance=None,
             request_data=symbol,
-            request_type=EPATH,
             response_type=EPATH,
             failed_response_type=BYTES,
         )

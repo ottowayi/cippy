@@ -430,7 +430,6 @@ class ConnectionManager(CIPObject):
             class_code=cls.class_code,
             instance=ConnectionManager.Instance.open_request,
             request_data=params,
-            request_type=ForwardCloseRequest,
             response_type=ForwardCloseResponse,
             failed_response_type=ForwardCloseFailedResponse,
         )
@@ -447,7 +446,6 @@ class ConnectionManager(CIPObject):
             class_code=cls.class_code,
             instance=ConnectionManager.Instance.open_request,
             request_data=params,
-            request_type=ForwardOpenRequest,
             response_type=ForwardOpenResponse,
             failed_response_type=ForwardOpenFailedResponse,
         )
@@ -465,7 +463,6 @@ class ConnectionManager(CIPObject):
             class_code=cls.class_code,
             instance=cls.Instance.open_request,
             request_data=params,
-            request_type=LargeForwardOpenRequest,
             response_type=ForwardOpenResponse,
             failed_response_type=ForwardOpenFailedResponse,
         )
