@@ -11,10 +11,10 @@ from ._base import BufferT, DataType, ElementaryDataType, _ElementaryDataTypeMet
 from ._core_types import StringDataType
 from .numeric import UDINT, UINT, USINT
 
-__all__ = ("LOGIX_STRING", "STRING", "STRING2", "STRINGN", "STRINGI", "SHORT_STRING", "CSTRING")
+__all__ = ("LONG_STRING", "STRING", "STRING2", "STRINGN", "STRINGI", "SHORT_STRING", "CSTRING")
 
 
-class LOGIX_STRING(StringDataType):  # noqa
+class LONG_STRING(StringDataType):  # noqa
     """
     Character string, 1-byte per character, 4-byte length
     """
