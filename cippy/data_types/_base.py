@@ -133,7 +133,7 @@ class DataType[T](metaclass=_DataTypeMeta):
             if isinstance(buffer, bytes) and (leftover := stream.read()):
                 cls.__log.debug(f"leftover data decoding {cls.__name__}: {leftover!r}")
             return value
-        except BufferEmptyError:
+        except (BufferEmptyError, DataError):
             raise
         except Exception as err:
             raise DataError(f"Error unpacking {buff_repr(buffer)} as {cls.__name__}") from err
