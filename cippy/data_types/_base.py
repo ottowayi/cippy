@@ -24,6 +24,7 @@ from typing import (
     get_type_hints,
     overload,
 )
+from typing_extensions import reveal_type
 
 from cippy._logging import get_logger
 from cippy.exceptions import BufferEmptyError, DataError
@@ -772,7 +773,8 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
         if issubclass(self.element_type, Struct):
             for i, obj in enumerate(self._array):
                 obj.__parent_array__ = (self, i)  # type: ignore
-        self._encoded_array = [bytes(x) for x in self._array]
+
+        self._encoded_array = [bytes(x) for x in self._array]  # type: ignore
 
     @property
     def size(self) -> int:  # pyright: ignore [reportIncompatibleVariableOverride]
@@ -822,10 +824,10 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
         try:
             if isinstance(item, slice):
                 self._array[item] = (self._convert_element(v) for v in value)
-                self._encoded_array[item] = (bytes(x) for x in self._array[item])
+                self._encoded_array[item] = (bytes(x) for x in self._array[item])  # type: ignore
             else:
                 self._array[item] = self._convert_element(value)
-                self._encoded_array[item] = bytes(self._array[item])
+                self._encoded_array[item] = bytes(self._array[item])  # type: ignore
 
             if self.__parent_struct__ is not None:  # type: ignore
                 parent, my_name = self.__parent_struct__  # type: ignore
