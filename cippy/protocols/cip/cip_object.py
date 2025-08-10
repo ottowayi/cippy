@@ -212,7 +212,7 @@ class CIPObject[TIns: Struct, TCls: Struct](metaclass=_MetaCIPObject):
     @service(id=USINT(0x03))
     @classmethod
     def get_attribute_list[T: DataType](
-        cls, attributes: Sequence[CIPAttribute[T]], instance: int | None = 1
+        cls, attributes: Sequence[CIPAttribute], instance: int | None = 1
     ) -> CIPRequest[Struct | BYTES]:
         members: list[
             tuple[str, type[DataType | AttrListItem[T]]] | tuple[str, type[DataType] | AttrListItem[T], Field]

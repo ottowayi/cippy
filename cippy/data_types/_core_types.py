@@ -42,6 +42,9 @@ class BoolDataType(ElementaryDataType[bool], int, metaclass=_ElementaryDataTypeM
         data = cls._stream_read(stream, cls.size)
         return cls(data[0])
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({bool(self)})"
+
 
 class FloatDataType(ElementaryDataType[float], float, metaclass=_ElementaryDataTypeMeta):
     def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
@@ -71,6 +74,9 @@ class StringDataType(ElementaryDataType[str], str, metaclass=_ElementaryDataType
         str_data = cls._stream_read(stream, str_len)
 
         return cls(str_data.decode(cls.encoding))
+
+    def __str__(self):
+        return str.__str__(self)
 
 
 class BitArrayType(IntDataType):

@@ -121,26 +121,36 @@ def message_router_service[TReq: DataType, TResp: DataType, TFResp: DataType](
     class_code: int,
     instance: int | None = 1,
     attribute: "CIPAttribute | None" = None,
-    request_data: TReq | None = None,
+    request_data: TReq | bytes | None = None,
     response_type: type[TResp],
     failed_response_type: type[TFResp] = BYTES,
     response_parser: CIPResponseParser[TResp | TFResp] | None = None,
     success_statuses: set[USINT | int] | None = None,
 ) -> CIPRequest[TResp | TFResp]:
+    """
+    ...
+    """
     attr_id = None if attribute is None else attribute.id
-
     parser = response_parser or MsgRouterResponseParser(
         response_type=response_type,
         failed_response_type=failed_response_type,
         success_statuses={USINT(0)} if success_statuses is None else success_statuses,
     )
+    match request_data:
+        case None:
+            req_data = b""
+        case bytes():
+            req_data = request_data
+        case _:
+            req_data = bytes(request_data)
+
     return CIPRequest(
         message=MessageRouterRequest.build(
             service=service,
             class_code=class_code,
             instance=instance or 0,
             attribute=attr_id,
-            data=bytes(request_data) if request_data is not None else b"",
+            data=req_data,
         ),
         response_parser=parser,
     )

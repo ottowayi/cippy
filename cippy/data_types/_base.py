@@ -1,6 +1,6 @@
 import types
 from collections.abc import Mapping
-from dataclasses import Field, field, fields, make_dataclass
+from dataclasses import Field, dataclass, field, fields, make_dataclass
 from inspect import isclass
 from io import BytesIO
 from struct import calcsize, pack, unpack
@@ -54,14 +54,14 @@ def buff_repr(buffer: BufferT) -> str:
 
 
 def get_bytes(buffer: BufferT, length: int) -> bytes:
-    if isinstance(buffer, bytes):
+    if not isinstance(buffer, BytesIO):
         return buffer[:length]
 
     return buffer.read(length)
 
 
 def as_stream(buffer: BufferT) -> BytesIO:
-    if isinstance(buffer, bytes):
+    if not isinstance(buffer, BytesIO):
         return BytesIO(buffer)
     return buffer
 
@@ -91,7 +91,7 @@ class DataType[T](metaclass=_DataTypeMeta):
     """
 
     __encoded_value__: bytes = b""
-    size: int = 0
+    size: ClassVar[int] = 0
     __log = get_logger(__qualname__)
 
     def __new__(cls, *args, **kwargs):
@@ -155,6 +155,9 @@ class DataType[T](metaclass=_DataTypeMeta):
     def _stream_peek(cls, stream: BytesIO, size: int) -> bytes:
         return stream.getvalue()[stream.tell() : stream.tell() + size]
 
+    def __rich__(self) -> str:
+        return self.__repr__()
+
 
 class _ElementaryDataTypeMeta(_DataTypeMeta):
     code: int
@@ -183,9 +186,9 @@ class ElementaryDataType[T: ElementaryPyType](DataType[T], metaclass=_Elementary
     Type that represents a single primitive value in CIP.
     """
 
-    code: int = 0x00  #: CIP data type identifier
-    size: int = 0  #: size of type in bytes
-    _format: str = ""
+    code: ClassVar[int] = 0x00  #: CIP data type identifier
+    size: ClassVar[int] = 0  #: size of type in bytes
+    _format: ClassVar[str] = ""
     _base_type: type[T]
 
     # keeps track of all subclasses using the cip type code
@@ -322,44 +325,22 @@ def attr[T: DataType](
     reserved: bool = False,
     len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
     size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
+    conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
+    fmt: str | None = None,
     **kwargs,
 ) -> T: ...
-
-
 @overload
-def attr(  # if reserved=True
+def attr[T: DataType](
     *,
-    default: DataType,
+    default: DataType | None = None,
     reserved: Literal[True] = True,
     init: bool = False,
     len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
     size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
+    conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
+    fmt: str | None = None,
     **kwargs,
 ) -> Any: ...
-
-
-@overload
-def attr(  # if init=False
-    *,
-    init: Literal[False] = False,
-    reserved: bool = False,
-    len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
-    size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
-    **kwargs,
-) -> Any: ...
-
-
-@overload
-def attr(  # if field is a size ref
-    *,
-    init: bool = True,
-    # reserved: bool = False,
-    len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
-    size_ref: Literal[True] | tuple[Callable[[int], int], Callable[[int], int]] = True,
-    **kwargs,
-) -> Any: ...
-
-
 def attr[T: DataType](
     *,
     default: T | None = None,
@@ -701,6 +682,10 @@ class Struct(DataType, metaclass=_StructMeta):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(self.__field_reprs__())})"
+
+    def __rich_console__(self, console, options):
+        yield self.__class__.__name__
+        yield from self.__field_reprs__()
 
 
 class _ArrayMeta(_DataTypeMeta):
