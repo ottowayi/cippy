@@ -37,7 +37,7 @@ class ForwardOpenRequest(Struct):
     originator_vendor_id: UINT
     originator_serial: UDINT
     timeout_multiplier: USINT
-    _reserved: BYTES[3] | bytes = attr(reserved=True, default=b"\x00" * 3)
+    _reserved: BYTES[3] | bytes = attr(reserved=True, default=BYTES(b"\x00" * 3), init=False)
     o2t_rpi: UDINT
     o2t_connection_params: WORD
     t2o_rpi: UDINT
@@ -55,7 +55,7 @@ class LargeForwardOpenRequest(Struct):
     originator_vendor_id: UINT
     originator_serial: UDINT
     timeout_multiplier: USINT
-    _reserved: BYTES[3] | bytes = attr(reserved=True, default=b"\x00" * 3)
+    _reserved: BYTES[3] | bytes = attr(reserved=True, default=BYTES(b"\x00" * 3), init=False)
     o2t_rpi: UDINT
     o2t_connection_params: DWORD
     t2o_rpi: UDINT
@@ -235,14 +235,14 @@ class UnconnectedSendRequest(Struct):
 class UnconnectedSendResponseHeader(Struct):
     reply_service: USINT
     _reserved: USINT = attr(reserved=True, default=USINT(0))
-    general_status: USINT  # pyright: ignore [reportGeneralTypeIssues]
+    general_status: USINT
 
     __field_descriptions__ = {"general_status": GeneralStatusCodes.dict()}  # type: ignore
 
 
 class UnconnectedSendSuccessResponse(Struct):
-    _reserved2: USINT = attr(reserved=True, default=USINT(0))
-    service_response_data: BYTES  # pyright: ignore [reportGeneralTypeIssues]
+    _reserved2: USINT = attr(reserved=True, default=USINT(0), init=False)
+    service_response_data: BYTES
 
 
 class UnconnectedSendFailedResponse(Struct):
@@ -300,17 +300,16 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
         )
 
 
-# def _bit_count(arr:Array[BOOL, int] ) -> int:
-#     return 0  # TODO: need to change encode/decode len_ref to get array and not just len
-
-
-# class ConnectionEntryList(StructType):
+# TODO: when len_ref passes the array and not just the len of it
+# class ConnectionEntryList(Struct):
 #     num_entries: UINT
-#     conn_open_bits: BOOL[...] = attr(len_ref=(
-#         'num_entries',
-#         lambda x: (x - 8 - 1) // 8,
-#         lambda x: _bit_count,
-#     ))
+#     conn_open_bits: USINT[...] = attr(
+#         len_ref=(
+#             "num_entries",
+#             lambda x: len(x) // 8 + (1 if len(x) % 8 else 0),
+#             lambda x: len(x) * 8,
+#         )
+#     )
 
 
 class ConnMgrExtStatusCodesConnFailure(StatusEnum):
@@ -389,26 +388,26 @@ class ConnectionManager(CIPObject):
     """
 
     class_code = 0x06
-    _class_all_exclude = {"optional_attrs_list", "optional_service_list"}
 
     #: Number of received Forward Open requests
-    open_requests = CIPAttribute(id=1, data_type=UINT)
+    open_requests = CIPAttribute(id=1, data_type=UINT, get_all_instance=True)
     #: Number of Forward Open requests rejected because of bad formatting
-    open_format_rejects = CIPAttribute(id=2, data_type=UINT)
+    open_format_rejects = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Number of Forward Open requests rejected for lack of resources
-    open_resource_rejects = CIPAttribute(id=3, data_type=UINT)
+    open_resource_rejects = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: Number of Forward Open requests reject for reasons other than bad formatting or lack of resources
-    open_other_rejects = CIPAttribute(id=4, data_type=UINT)
+    open_other_rejects = CIPAttribute(id=4, data_type=UINT, get_all_instance=True)
     #: Number of received Forward Close requests
-    close_requests = CIPAttribute(id=5, data_type=UINT)
+    close_requests = CIPAttribute(id=5, data_type=UINT, get_all_instance=True)
     #: Number of Forward Close requests rejected because of bad formatting
-    close_format_rejects = CIPAttribute(id=6, data_type=UINT)
+    close_format_rejects = CIPAttribute(id=6, data_type=UINT, get_all_instance=True)
     #: Number of Forward Close requests reject for reasons other than bad formatting
-    close_other_rejects = CIPAttribute(id=7, data_type=UINT)
+    close_other_rejects = CIPAttribute(id=7, data_type=UINT, get_all_instance=True)
     #: Number of connection timeouts in connections managed by this instance
-    connection_timeout = CIPAttribute(id=8, data_type=UINT)
+    connection_timeouts = CIPAttribute(id=8, data_type=UINT, get_all_instance=True)
     #: List of connections, each positive bit corresponds to a connection instance
     # TODO connection_entry_list = CIPAttribute(id=9, data_type=...)
+    #      and also get_all_instance=True for following attrs
     # attribute 10 is reserved or obsolete
     #: CPU utilization as tenths of a percent, 0-100% scaled to 0-1000
     cpu_utilization = CIPAttribute(id=11, data_type=UINT)
@@ -416,6 +415,11 @@ class ConnectionManager(CIPObject):
     max_buffer_size = CIPAttribute(id=12, data_type=UDINT)
     #: Currently available size (in bytes) of the buffer
     buffer_size_remaining = CIPAttribute(id=13, data_type=UDINT)
+
+    @classmethod
+    def __customize_object__(cls) -> None:
+        cls.optional_attrs_list.get_all_class = False
+        cls.optional_service_list.get_all_class = False
 
     @service(id=USINT(0x4E))
     @classmethod

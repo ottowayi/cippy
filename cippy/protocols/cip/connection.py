@@ -123,12 +123,12 @@ class CIPConnection:
             return self._transport.config.host
         return f"{self._transport.config.host}/{self.route}"
 
-    def get_attributes_all[TIns: Struct, TCls: Struct](
+    def get_attributes_all[T: CIPObject](
         self,
-        cip_object: type[CIPObject[TIns, TCls]],
+        cip_object: type[T],
         instance: int | None = 1,
         cip_connected: bool | None = None,
-    ) -> CIPResponse[TCls | TIns | BYTES] | CIPResponse[TCls | TIns | BYTES | UnconnectedSendFailedResponse]:
+    ) -> CIPResponse[Struct | BYTES] | CIPResponse[Struct | BYTES | UnconnectedSendFailedResponse]:
         self.__log.info(f"sending get_attributes_all request for {cip_object}...")
         request = cip_object.get_attributes_all(instance=instance)
         if response := self.send(request, cip_connected=cip_connected):
@@ -139,7 +139,7 @@ class CIPConnection:
         return response
 
     def get_attribute_single[T: DataType](
-        self, attribute: CIPAttribute[T], instance: int | None = 1, cip_connected: bool | None = None
+        self, attribute: CIPAttribute, instance: int | None = 1, cip_connected: bool | None = None
     ):
         self.__log.info("sending get_attribute_single request for %s ...", attribute)
         request = attribute.object.get_attribute_single(attribute=attribute, instance=instance)

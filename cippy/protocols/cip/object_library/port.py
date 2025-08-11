@@ -50,11 +50,11 @@ class Port(CIPObject):
 
     # --- Instance Attributes ---
     #: Indicates the type of port, see :class:`PortTypes`
-    port_type = CIPAttribute(id=1, data_type=UINT)
+    port_type = CIPAttribute(id=1, data_type=UINT, get_all_instance=True)
     #: CIP port number of the port
-    port_number = CIPAttribute(id=2, data_type=UINT)
+    port_number = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Logical path that identifies the object for this port
-    link_object = CIPAttribute(id=3, data_type=PADDED_EPATH_LEN)
+    link_object = CIPAttribute(id=3, data_type=PADDED_EPATH_LEN, get_all_instance=True)
     #: String name that identifies the physical port on the device.
     port_name = CIPAttribute(id=4, data_type=SHORT_STRING)
     #: String name of the port type
@@ -64,9 +64,9 @@ class Port(CIPObject):
     #: Node number of the device on the port
     node_address = CIPAttribute(id=7, data_type=PADDED_EPATH)
     #: Range of node numbers on the port, not used with EtherNet/IP
-    port_node_range = CIPAttribute(id=8, data_type=UINT[2])
+    port_node_range = CIPAttribute(id=8, data_type=UINT[2], get_all_instance=True)
     #: Electronic key of network or chassis the port is attached to
-    port_key = CIPAttribute(id=9, data_type=PACKED_EPATH)
+    port_key = CIPAttribute(id=9, data_type=PACKED_EPATH, get_all_instance=True)
 
     _svc_get_attrs_all_instance_type = PortInstanceAttrs
     _svc_get_attrs_all_class = PortClassAttrs

@@ -1,4 +1,4 @@
-from cippy.protocols.cip.cip_object import CIPObject, GeneralStatusCodes
+from cippy.protocols.cip.cip_object import CIPAttribute, CIPObject, GeneralStatusCodes
 from cippy.protocols.cip.object_library.connection_manager import ConnectionManager, ConnMgrExtStatusCodesConnFailure
 from cippy.data_types import BYTES, UINT, UDINT
 import pytest
@@ -106,3 +106,24 @@ status_msg_tests = [
 def test_get_status_messages(inputs, expected):
     msgs = inputs.cip_object.get_status_messages(inputs.service, inputs.status, inputs.ext_status, inputs.extra_data)
     assert msgs == expected
+
+
+def test_cip_object_instance():
+    class TestObject(CIPObject):
+        attr1 = CIPAttribute(id=1, data_type=UINT)
+        attr2 = CIPAttribute(id=2, data_type=UDINT)
+
+    x = TestObject(instance=1)
+    assert x.instance == 1
+    assert x.__attributes__ == {"attr1": TestObject.attr1, "attr2": TestObject.attr2}
+    with pytest.raises(AttributeError):
+        x.attr1  # not set on instance yet
+
+    x.attr1 = 2
+    assert isinstance(x.attr1, UINT)
+    with pytest.raises(AttributeError):
+        x.max_instance  # class attr on instance
+
+    assert x.dict() == {"attr1": 2}
+
+    # TODO: more, duh

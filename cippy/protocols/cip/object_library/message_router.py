@@ -2,7 +2,7 @@ from typing import ClassVar, cast
 
 from cippy.data_types import BYTES, EPATH, UINT, USINT, attr, Struct
 
-from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, StandardClassAttrs, service
+from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, service
 from ..msg_router_services import message_router_service
 from .._base import CIPRequest
 
@@ -14,7 +14,7 @@ class MessageRouterInstanceAttrs(Struct):
     active_connections: UINT[...] = attr(len_ref="num_active")
 
 
-class MessageRouter(CIPObject[MessageRouterInstanceAttrs, StandardClassAttrs]):
+class MessageRouter(CIPObject):
     """
     The object handles routing service calls to objects within the device from client messages
     """
@@ -22,13 +22,13 @@ class MessageRouter(CIPObject[MessageRouterInstanceAttrs, StandardClassAttrs]):
     class_code = 0x02
 
     #: List of supported objects (class codes)
-    object_list = CIPAttribute(id=1, data_type=UINT[UINT])
+    object_list = CIPAttribute(id=1, data_type=UINT[UINT], get_all_instance=True)
     #: Max number of supported connections
-    num_available = CIPAttribute(id=2, data_type=UINT)
+    num_available = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Number of currently active connections
-    num_active = CIPAttribute(id=3, data_type=UINT)
+    num_active = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: List of connection ids for active connections
-    active_connections = CIPAttribute(id=4, data_type=UINT[...])
+    active_connections = CIPAttribute(id=4, data_type=UINT[...], get_all_instance=True)
 
     _svc_get_attrs_all_instance_type = MessageRouterInstanceAttrs
 

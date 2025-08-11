@@ -1,10 +1,12 @@
 from contextlib import contextmanager
+from dataclasses import asdict
 from functools import cached_property
 from typing import Generator, Self, cast
 
 from cippy._logging import get_logger
 from cippy.data_types import Struct
 from cippy.protocols.cip import CIPConfig, CIPConnection, CIPRoute
+from cippy.protocols.cip._base import CIPResponse
 from cippy.protocols.cip.cip_object import CIPObject
 from cippy.protocols.cip.object_library.identity import Identity, IdentityInstanceAttrs
 from cippy.protocols.ethernetip import ETHERNETIP_PORT, EIPConfig, EIPConnection
@@ -68,12 +70,12 @@ class CIPDriver:
             return False
 
     @cached_property
-    def identity(self) -> IdentityInstanceAttrs | None:
+    def identity(self) -> Identity | None:
         try:
-            if not (resp := self._connection.get_attributes_all(Identity)):
+            if not (resp := self.read_object(Identity)):
                 self.__log.error(f"failed to get identity for {self.connection.connection_path}")
                 return None
-            return cast(IdentityInstanceAttrs, resp.data)
+            return resp
         except Exception:
             self.__log.exception("failed to get identity")
             return None
@@ -101,26 +103,21 @@ class CIPDriver:
     def __str__(self):
         return f"{self.__class__.__name__} @ {self.connection.connection_path}"
 
-    def read_object[T: Struct, FT: Struct](
-        self, cip_object: type[CIPObject[T, FT]], instance: int | None = CIPObject.Instance.DEFAULT
+    def read_object[T: CIPObject](
+        self, cip_object: type[T], instance: int | None = CIPObject.Instance.DEFAULT
     ) -> T | None:
         self.__log.info(f"reading object {cip_object} ({instance=})...")
 
         try:
             if resp := self.connection.get_attributes_all(cip_object, instance):
-                value = cast(T, resp.data)
-
+                value = cip_object(instance=instance, **resp.data)  # type: ignore
                 self.__log.info(f"... success: {value}")
                 return value
             self.__log.info(f"...failed to read object {cip_object} with get_attributes_all: {resp.status_message}")
             try:
-                resp_type = (
-                    cip_object._svc_get_attrs_all_class_type  # type: ignore
-                    if not instance
-                    else cip_object._svc_get_attrs_all_instance_type  # type: ignore
-                )
-                obj_attrs = {a.name: a for a in cip_object.__cip_attributes__.values()}
-                attrs = [obj_attrs[a] for a in resp_type.__struct_attributes__]
+                _all_struct = cip_object.__class_struct__ if not instance else cip_object.__instance_struct__
+                _attrs = cip_object.__cip_class_attributes__ if not instance else cip_object.__cip_instance_attributes__
+                attrs = [_attrs[m] for m in _all_struct.__struct_members__]
             except KeyError as err:
                 self.__log.error(f"...invalid get_attributes_all response type, cip object missing attribute: {err}")
                 return None
@@ -145,7 +142,7 @@ class CIPDriver:
                 self.__log.info(f"... failed to read attributes from object: {', '.join(failed_attrs)}")
                 return None
             else:
-                value = cast(T, resp_type(**values))
+                value = cast(T, cip_object(instance=instance, **values))
                 self.__log.info(f"... success: {value}")
                 return value
         except Exception:

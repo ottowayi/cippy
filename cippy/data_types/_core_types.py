@@ -19,10 +19,13 @@ class IntDataType(ElementaryDataType[int], int, metaclass=_ElementaryDataTypeMet
         if format_spec in ("@x", "@X"):
             char_count = self.size * 2
             format_spec = f"0{char_count}{format_spec[1]}"
-        if format_spec == "@b":
+        if format_spec in ("@b", "@B"):
             bit_count = 8 * self.size
-            char_count = 2 + bit_count + (bit_count // 4) - 1
-            format_spec = f"#0{char_count}_b"
+            char_count = bit_count + (bit_count // 4) - 1
+            alt = "#" if format_spec == "@b" else ""
+            if alt:
+                char_count += 2
+            format_spec = f"{alt}0{char_count}_b"
         return super().__format__(format_spec)
 
 

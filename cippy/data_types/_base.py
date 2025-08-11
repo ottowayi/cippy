@@ -323,7 +323,7 @@ def attr[T: DataType](
     *,
     default: T,
     init: Literal[True] = True,
-    reserved: bool = False,
+    reserved: Literal[False] = False,
     len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
     size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
     conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
@@ -335,7 +335,7 @@ def attr[T: DataType](
     *,
     default: DataType | None = None,
     reserved: Literal[True] = True,
-    init: bool = False,
+    init: Literal[False] = False,
     len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
     size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
     conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
@@ -363,7 +363,7 @@ def attr[T: DataType](
     init: Whether the attribute can be provided when creating the struct. If False, then the attribute
           will not be set on the instance automatically and must be done manually in __post_init__.
           Value will be overwritten with decoded value after instance is created using decode()
-    reserved: Whether the attribute is reserved. If True, the attribute will not be _user facing_ and implies `init=True`.
+    reserved: Whether the attribute is reserved. If True, the attribute will not be _user facing_ and implies `init=False`.
     len_ref: Used forArray attributes whose length is determined by another attribute and used when decoding the
              struct whole. The attribute should be type hinted as `Array[...]` as well. This parameter must be
              the name of the length attribute or a tuple of the name, a decode function, and an encoded function.
@@ -379,8 +379,6 @@ def attr[T: DataType](
         raise DataError("Cannot specify both reserved=True and size_ref/len_ref")
     if size_ref and len_ref:
         raise DataError("Cannot specify both size_ref and len_ref")
-    if reserved and not init:
-        raise DataError("Cannot specify both reserved=True and init=False")
     if size_ref:
         init = False
     if reserved:
