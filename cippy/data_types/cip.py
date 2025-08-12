@@ -659,13 +659,16 @@ class EPATH[T: CIPSegment](DataType):
             _len = USINT.decode(stream)
             if cls.pad_len:
                 _ = USINT.decode(stream)
-            ary_type = array(CIPSegment, _len)
-        elif cls.length is None:
+            data = cls._stream_read(stream, _len * 2)
             ary_type = array(CIPSegment, None)
+            segments = [s for s in ary_type.decode(data, padded=cls.padded)]
         else:
-            ary_type = array(CIPSegment, cls.length)
+            if cls.length is None:
+                ary_type = array(CIPSegment, None)
+            else:
+                ary_type = array(CIPSegment, cls.length)
 
-        segments = [s for s in ary_type.decode(stream, padded=cls.padded)]
+            segments = [s for s in ary_type.decode(stream, padded=cls.padded)]
         return cls(segments)  # type: ignore
 
     def __truediv__(self, other: T | Sequence[T]) -> Self:
