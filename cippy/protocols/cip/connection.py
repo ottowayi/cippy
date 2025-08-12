@@ -129,10 +129,10 @@ class CIPConnection:
         instance: int | None = 1,
         cip_connected: bool | None = None,
     ) -> CIPResponse[Struct | BYTES] | CIPResponse[Struct | BYTES | UnconnectedSendFailedResponse]:
-        self.__log.info(f"sending get_attributes_all request for {cip_object}...")
+        self.__log.debug(f"sending get_attributes_all request for {cip_object}...")
         request = cip_object.get_attributes_all(instance=instance)
         if response := self.send(request, cip_connected=cip_connected):
-            self.__log.info(f"... success: {response.data=}")
+            self.__log.debug(f"... success: {response.data=}")
         else:
             self.__log.error(f"get_attributes_all for {cip_object} failed: {response.status_message}")
 
@@ -141,11 +141,11 @@ class CIPConnection:
     def get_attribute_single[T: DataType, TObj: CIPObject](
         self, attribute: CIPAttribute[T, TObj], instance: int | None = 1, cip_connected: bool | None = None
     ):
-        self.__log.info("sending get_attribute_single request for %s ...", attribute)
+        self.__log.debug("sending get_attribute_single request for %s ...", attribute)
         request = attribute.object.get_attribute_single(attribute=attribute, instance=instance)
 
         if response := self.send(request, cip_connected=cip_connected):
-            self.__log.info("... success: response.data=%s", response.data)
+            self.__log.debug("... success: response.data=%r", response.data)
         else:
             self.__log.error("get_attribute_single for %s failed: %s", attribute, response.status_message)
         return response
@@ -156,13 +156,13 @@ class CIPConnection:
         instance: int | None = 1,
         cip_connected: bool | None = None,
     ):
-        self.__log.info(f"sending get_attribute_list request for {attributes}...")
+        self.__log.debug(f"sending get_attribute_list request for {attributes}...")
         if len({a.object for a in attributes}) != 1:
             raise ValueError("attributes must all be from the same object")
 
         request = attributes[0].object.get_attribute_list(attributes=attributes, instance=instance)
         if response := self.send(request, cip_connected=cip_connected):
-            self.__log.info(f"... success: {response.data=}")
+            self.__log.debug(f"... success: {response.data=}")
         else:
             self.__log.error(f"get_attribute_list for {attributes} failed: {response.status_message}")
         return response
