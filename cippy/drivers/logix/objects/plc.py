@@ -1,10 +1,5 @@
-from cippy.data_types import BYTES, STRING, Struct, attr
+from cippy.data_types import STRING
 from cippy.protocols.cip import CIPAttribute, CIPObject
-
-
-class PLCInstanceAttrs(Struct):
-    program_name: STRING
-    unknown: BYTES = attr(reserved=True, default=BYTES(b""))
 
 
 class PLC(CIPObject):
@@ -16,5 +11,3 @@ class PLC(CIPObject):
     class_code = 0x64
 
     program_name = CIPAttribute(id=1, data_type=STRING)
-
-    _svc_get_attrs_all_instance_type = PLCInstanceAttrs

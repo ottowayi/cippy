@@ -418,8 +418,9 @@ class ConnectionManager(CIPObject):
 
     @classmethod
     def __customize_object__(cls) -> None:
-        cls.optional_attrs_list.get_all_class = False
-        cls.optional_service_list.get_all_class = False
+        cls.num_instances.get_all_class = False
+        cls.max_class_attr.get_all_class = True
+        cls.max_instance_attr.get_all_class = True
 
     @service(id=USINT(0x4E))
     @classmethod

@@ -28,16 +28,6 @@ class Status(WORD):
         self.major_unrecoverable_fault = bits[11]
 
 
-class IdentityInstanceAttrs(Struct):
-    vendor_id: UINT
-    device_type: UINT
-    product_code: UINT
-    revision: Revision
-    status: Status
-    serial_number: UDINT
-    product_name: SHORT_STRING
-
-
 class Identity(CIPObject):
     """
     This object provides general identity and status information about a device.
@@ -57,7 +47,7 @@ class Identity(CIPObject):
     #: Revision of the item the Identity Object represents
     revision = CIPAttribute(id=4, data_type=Revision, get_all_instance=True)
     #: Summary status of the device
-    status = CIPAttribute(id=5, data_type=WORD, get_all_instance=True)
+    status = CIPAttribute(id=5, data_type=Status, get_all_instance=True)
     #: Serial number of the device
     serial_number = CIPAttribute(id=6, data_type=UDINT, get_all_instance=True)
     #: Human readable identification of the device
@@ -95,6 +85,8 @@ class Identity(CIPObject):
         cls.num_instances.get_all_class = False
         cls.optional_attrs_list.get_all_class = False
         cls.optional_service_list.get_all_class = False
+        cls.max_class_attr.get_all_class = True
+        cls.max_instance_attr.get_all_class = True
 
     _vendors: ClassVar[dict[int, str]] = VENDORS
 

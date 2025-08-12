@@ -1,10 +1,11 @@
 from cippy.data_types import Revision
 from cippy.const import VENDOR_ID_ROCKWELL, VENDOR_NAME_ROCKWELL
-from cippy.protocols.cip.object_library import IdentityInstanceAttrs
+from cippy.protocols.cip.object_library import Identity
 
 
 def test_device_identity():
-    identity = IdentityInstanceAttrs(
+    identity = Identity(
+        instance=1,
         vendor_id=VENDOR_ID_ROCKWELL,
         device_type=0x0C,
         product_code=0x69,

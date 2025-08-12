@@ -7,13 +7,6 @@ from ..msg_router_services import message_router_service
 from .._base import CIPRequest
 
 
-class MessageRouterInstanceAttrs(Struct):
-    object_list: UINT[UINT]
-    num_available: UINT
-    num_active: UINT
-    active_connections: UINT[...] = attr(len_ref="num_active")
-
-
 class MessageRouter(CIPObject):
     """
     The object handles routing service calls to objects within the device from client messages
@@ -29,8 +22,6 @@ class MessageRouter(CIPObject):
     num_active = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: List of connection ids for active connections
     active_connections = CIPAttribute(id=4, data_type=UINT[...], get_all_instance=True)
-
-    _svc_get_attrs_all_instance_type = MessageRouterInstanceAttrs
 
     SYMBOLIC_TRANSLATION_SERVICE_ID: ClassVar[USINT] = USINT(0x4B)
 

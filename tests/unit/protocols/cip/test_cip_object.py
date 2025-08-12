@@ -1,9 +1,25 @@
 from cippy.protocols.cip.cip_object import CIPAttribute, CIPObject, GeneralStatusCodes
 from cippy.protocols.cip.object_library.connection_manager import ConnectionManager, ConnMgrExtStatusCodesConnFailure
-from cippy.data_types import BYTES, UINT, UDINT
+from cippy.data_types import (
+    BYTES,
+    UINT,
+    UDINT,
+    CIPSegment,
+    SegmentType,
+    PADDED_EPATH,
+    LogicalSegment,
+    LogicalSegmentType,
+    USINT,
+    SHORT_STRING,
+    PortSegment,
+    PADDED_EPATH_PAD_LEN,
+)
 import pytest
 from dataclasses import dataclass, field
 from typing import Sequence
+
+from cippy.protocols.cip.object_library.identity import Identity
+from cippy.protocols.cip.object_library.port import Port
 
 
 @dataclass
@@ -127,3 +143,29 @@ def test_cip_object_instance():
     assert x.dict() == {"attr1": 2}
 
     # TODO: more, duh
+
+
+def test_cip_object_decodes():
+    port = Port(
+        instance=1,
+        port_type=UINT(100),
+        port_number=UINT(10),
+        link_object=PADDED_EPATH_PAD_LEN(
+            segments=[
+                LogicalSegment(type=LogicalSegmentType.type_class_id, value=UINT(768)),
+                LogicalSegment(type=LogicalSegmentType.type_instance_id, value=USINT(1)),
+            ]
+        ),
+        port_name=SHORT_STRING("Backplane"),
+        node_address=PADDED_EPATH(segments=[PortSegment(port=1, link_address=USINT(1))]),
+    )
+
+    enc_port = b"d\x00\x01\x00\x03\x00!\x00\x00\x03$\x01\tBackplane\x01\x01"
+
+    assert port == Port(instance=1, **Port.__instance_struct__.decode(enc_port))
+
+    cls_iden = Identity(
+        instance=None, object_revision=UINT(1), max_instance=UINT(1), max_class_attr=UINT(7), max_instance_attr=UINT(7)
+    )
+    enc_cls_iden = b"\x01\x00\x01\x00\x07\x00\x07\x00"
+    assert cls_iden == Identity(instance=0, **Identity.__class_struct__.decode(enc_cls_iden))

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from functools import wraps
 from os import urandom
-from typing import Final, Generator, Literal, Sequence, cast
+from typing import Final, Generator, Literal, Sequence, cast, Any
 
 from cippy import get_logger
 from cippy.data_types import (
@@ -138,8 +138,8 @@ class CIPConnection:
 
         return response
 
-    def get_attribute_single[T: DataType](
-        self, attribute: CIPAttribute, instance: int | None = 1, cip_connected: bool | None = None
+    def get_attribute_single[T: DataType, TObj: CIPObject](
+        self, attribute: CIPAttribute[T, TObj], instance: int | None = 1, cip_connected: bool | None = None
     ):
         self.__log.info("sending get_attribute_single request for %s ...", attribute)
         request = attribute.object.get_attribute_single(attribute=attribute, instance=instance)
@@ -150,8 +150,11 @@ class CIPConnection:
             self.__log.error("get_attribute_single for %s failed: %s", attribute, response.status_message)
         return response
 
-    def get_attribute_list(
-        self, attributes: Sequence[CIPAttribute], instance: int | None = 1, cip_connected: bool | None = None
+    def get_attribute_list[TObj: CIPObject](
+        self,
+        attributes: Sequence[CIPAttribute[Any, TObj]],
+        instance: int | None = 1,
+        cip_connected: bool | None = None,
     ):
         self.__log.info(f"sending get_attribute_list request for {attributes}...")
         if len({a.object for a in attributes}) != 1:
