@@ -257,8 +257,8 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
     failed_response_type: type[UnconnectedSendFailedResponse] = UnconnectedSendFailedResponse
 
     def parse(
-        self, data: BYTES, request: CIPRequest[T | UnconnectedSendFailedResponse | Array[UINT, USINT]]
-    ) -> CIPResponse[T | UnconnectedSendFailedResponse | Array[UINT, USINT]]:
+        self, data: BYTES, request: CIPRequest[T | UnconnectedSendFailedResponse]
+    ) -> CIPResponse[T | UnconnectedSendFailedResponse]:
         buff = as_stream(data)
         header = UnconnectedSendResponseHeader.decode(buff)
         self.__log.debug("decoded unconnected send response header: %r", header)
@@ -282,7 +282,7 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
                     remaining_path_size = USINT.decode(buff)
                     msg_data = UnconnectedSendFailedResponse(addl_status, remaining_path_size)
                 case _:
-                    msg_data = addl_status
+                    msg_data = UnconnectedSendFailedResponse(addl_status, USINT(0))
                     remaining_path_size = None
 
             general_msg, ext_msg = ConnectionManager.get_status_messages(
