@@ -1,14 +1,12 @@
 from contextlib import contextmanager
-from dataclasses import asdict
 from functools import cached_property
-from typing import Generator, Self, cast
+from typing import Any, Generator, Self, Sequence, cast
 
 from cippy._logging import get_logger
-from cippy.data_types import Struct
+from cippy.data_types import DataType
 from cippy.protocols.cip import CIPConfig, CIPConnection, CIPRoute
-from cippy.protocols.cip._base import CIPResponse
-from cippy.protocols.cip.cip_object import CIPObject
-from cippy.protocols.cip.object_library.identity import Identity, IdentityInstanceAttrs
+from cippy.protocols.cip.cip_object import CIPAttribute, CIPObject
+from cippy.protocols.cip.object_library.identity import Identity
 from cippy.protocols.ethernetip import ETHERNETIP_PORT, EIPConfig, EIPConnection
 
 
@@ -106,6 +104,13 @@ class CIPDriver:
     def read_object[T: CIPObject](
         self, cip_object: type[T], instance: int | None = CIPObject.Instance.DEFAULT
     ) -> T | None:
+        """
+        Attempts to read all attributes from an object, those defined in the `Get Attributes All` response.
+        First tries to use the get attributes all service, if that fails, it will try the get attributes list service
+        with all attributes, if that fails, it will try the get attribute single service for each attribute.
+        If any succeed, a `cip_object` instance will be returned, else `None`. If one of the fallback services was used,
+        any failed attributes will be set to `None` in the object instance.
+        """
         self.__log.info(f"reading object {cip_object} ({instance=})...")
 
         try:
@@ -147,6 +152,54 @@ class CIPDriver:
                 return value
         except Exception:
             self.__log.exception(f"unhandled exception trying to read object {cip_object}")
+
+    def read_attribute[T: DataType, TObj: CIPObject](
+        self, attribute: CIPAttribute[T, TObj], instance: int | None = CIPObject.Instance.DEFAULT
+    ) -> T | None:
+        """
+        Attempts to read an attribute. If successful, the value of that attribute will be returned, else None.
+        """
+        self.__log.info("reading attribute %s (instance=%d)...", attribute, instance)
+        try:
+            if resp := self.connection.get_attribute_single(attribute, instance):
+                self.__log.info(f"... success: {resp.data}")
+                return cast(T, resp.data)
+            else:
+                self.__log.info(f"... failed to read {attribute}: {resp.status_message}")
+                return None
+        except Exception:
+            self.__log.exception(f"unhandled exception trying to read attribute {attribute} ({instance=})")
+            return None
+
+    def read_attributes[T: DataType, TObj: CIPObject](
+        self, attributes: Sequence[CIPAttribute[Any, TObj]], instance: int | None = CIPObject.Instance.DEFAULT
+    ) -> list[Any | None] | None:
+        """
+        Attempts to read attributes from an object, all attributes must be from the same object.
+        First it will attempt using the get attributes list, if that fails it will attempt
+        to use the get attribute single service for each attribute.
+        If successful, a list of the attribute values will be returned. Individual attributes may fail
+        while others are successful, failed attributes will be set to `None`, the length and order
+        of the requested attributes will be maintained. Unless, if all attributes fail to read, the `None` is returned..
+        """
+        self.__log.info("reading attributes %s (instance=%d)...", ", ".join(str(a) for a in attributes), instance)
+        try:
+            if resp := self.connection.get_attribute_list(attributes, instance):
+                self.__log.info(f"... success: {resp.data}")
+                values: list[T | None] = [a.data if a else None for a in resp.data]  # type: ignore
+            else:
+                self.__log.info(f"... get_attribute_list failed, attempting get_attribute_single reads...")
+                values = [self.read_attribute(a, instance) for a in attributes]
+            if all(v is None for v in values):
+                self.__log.info("... all attributes failed, returning None")
+                return None
+            else:
+                self.__log.info(f"... success: {values}")
+                return values
+
+        except Exception:
+            self.__log.exception(f"unhandled exception trying to read attribute {attributes} ({instance=})")
+            return None
 
 
 def parse_connection_path(path: str) -> tuple[str, int, CIPRoute]:

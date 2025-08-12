@@ -149,7 +149,7 @@ def test_cip_object_decodes():
     port = Port(
         instance=1,
         port_type=UINT(100),
-        port_number=UINT(10),
+        port_number=UINT(1),
         link_object=PADDED_EPATH_PAD_LEN(
             segments=[
                 LogicalSegment(type=LogicalSegmentType.type_class_id, value=UINT(768)),
