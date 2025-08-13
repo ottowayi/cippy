@@ -236,7 +236,7 @@ class CIPObject(metaclass=_MetaCIPObject):
     max_instance_attr = CIPAttribute(id=7, data_type=UINT, class_attr=True, get_all_class=False)
 
     def __init__(self, instance: int | None, **kwargs) -> None:
-        self.instance = instance
+        self.instance: int = instance or 0
 
         for attr_name, attr_value in kwargs.items():
             setattr(self, attr_name, attr_value)
@@ -297,15 +297,15 @@ class CIPObject(metaclass=_MetaCIPObject):
 
     @service(id=USINT(0x03))
     @classmethod
-    def get_attribute_list[T: DataType, TObj: CIPObject](
-        cls, attributes: Sequence[CIPAttribute[T, TObj]], instance: int | None = 1
+    def get_attribute_list[TObj: CIPObject](
+        cls, attributes: Sequence[CIPAttribute[Any, TObj]], instance: int | None = 1
     ) -> CIPRequest[Struct | BYTES]:
         members: list[
-            tuple[str, type[DataType | AttrListItem[T]]] | tuple[str, type[DataType] | AttrListItem[T], Field]
+            tuple[str, type[DataType | AttrListItem[Any]]] | tuple[str, type[DataType] | AttrListItem[Any], Field]
         ] = [("count", UINT, field())]
         for _attr in attributes:
             _GetAttrsListItem = cast(
-                type[AttrListItem[T]],
+                type[AttrListItem[Any]],
                 type(
                     f"{_attr.name}_GetAttrListItem",
                     (Struct,),
