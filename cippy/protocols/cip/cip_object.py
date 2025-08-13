@@ -1,7 +1,5 @@
-from ast import Str
 from dataclasses import Field, dataclass, field, replace
 from inspect import isclass
-from re import L
 from typing import Callable, ClassVar, Final, Literal, Protocol, Sequence, cast, Self, overload, Any
 
 from cippy.data_types import BYTES, UINT, USINT, DataType, Struct, attr

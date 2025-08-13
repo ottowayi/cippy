@@ -1,13 +1,9 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
-from cippy.data_types import (
-    BYTES,
-    USINT,
-    DataType,
-)
+
+from cippy.data_types import BYTES, USINT, DataType
 
 if TYPE_CHECKING:
-    from .cip_object import CIPObject
     from .msg_router_services import MessageRouterRequest
 
 

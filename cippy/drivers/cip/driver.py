@@ -130,19 +130,19 @@ class CIPDriver:
             values = {}
             self.__log.info(f"...attempting to read object {cip_object} ({instance=}) with get_attribute_list...")
             if list_resp := self.connection.get_attribute_list(attrs, instance):
-                for attr in attrs:  # type: ignore
-                    attr_resp = getattr(list_resp.data, attr.name)
-                    values[attr.name] = None if attr_resp.status else attr_resp.data
+                for att in attrs:
+                    attr_resp = getattr(list_resp.data, att.name)
+                    values[att.name] = None if attr_resp.status else attr_resp.data
             else:
                 self.__log.info("...get_attribute_list failed, trying get_attribute_single reads...")
-                for attr in attrs:
-                    self.__log.info(f" ...reading {attr.name!r}...")
-                    if resp := self.connection.get_attribute_single(attr, instance):
-                        values[attr.name] = resp.data
+                for att in attrs:
+                    self.__log.info(f" ...reading {att.name!r}...")
+                    if resp := self.connection.get_attribute_single(att, instance):
+                        values[att.name] = resp.data
                         self.__log.info(f" ... success: {resp.data}")
                     else:
-                        self.__log.info(f"... failed to read {attr.name}: {resp.status_message}")
-                        values[attr.name] = None
+                        self.__log.info(f"... failed to read {att.name}: {resp.status_message}")
+                        values[att.name] = None
             if any(failed_attrs := [k for k, v in values.items() if v is None]):
                 self.__log.info(f"... failed to read attributes from object: {', '.join(failed_attrs)}")
                 return None
@@ -188,7 +188,7 @@ class CIPDriver:
                 self.__log.info(f"... success: {resp.data}")
                 values: list[T | None] = [a.data if a else None for a in resp.data]  # type: ignore
             else:
-                self.__log.info(f"... get_attribute_list failed, attempting get_attribute_single reads...")
+                self.__log.info("... get_attribute_list failed, attempting get_attribute_single reads...")
                 values = [self.read_attribute(a, instance) for a in attributes]
             if all(v is None for v in values):
                 self.__log.info("... all attributes failed, returning None")

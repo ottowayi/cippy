@@ -43,3 +43,8 @@ def test_cip_driver_basics():
         "max_instance_attr": UINT(7),
         "object_revision": UINT(1),
     }
+
+    identity_attrs = driver.read_attributes([Identity.vendor_id, Identity.serial_number, Identity.product_name])
+    assert identity_attrs
+    assert identity_attrs == [1, 0xC01EBE90, "1769-L23E-QBFC1 Ethernet Port"]
+    assert isinstance(identity_attrs[2], SHORT_STRING)
