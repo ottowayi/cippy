@@ -264,6 +264,7 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
         self.__log.debug("decoded unconnected send response header: %r", header)
         if header.general_status in self.success_statuses:
             resp_data = UnconnectedSendSuccessResponse.decode(buff)
+            self.__log.debug("decoded unconnected send response data: %r", resp_data)
             msg_data = self.response_type.decode(resp_data.service_response_data)
             msg = "Success"
         else:
