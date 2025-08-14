@@ -18,8 +18,8 @@ line-length = 120
 dev = [
     { include-group = 'test' },
     'ruff',
-    "pyright",
-    'rich'
+    'rich',
+    "basedpyright>=1.31.1",
 ]
 test = [
     'pytest',
@@ -43,3 +43,10 @@ explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ['tests/unit']
+
+[tool.basedpyright]
+enableTypeIgnoreComments = true
+reportIgnoreCommentWithoutRule = false
+reportExplicitAny = false
+reportAny = false
+reportImportCycles = false

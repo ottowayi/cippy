@@ -1,18 +1,17 @@
 from io import BytesIO
-from typing import Any, Literal, Self, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Self, override, cast
+from collections.abc import Sequence
 
 from ..exceptions import DataError
-from ._base import ArrayLenT, Array, ElementaryDataType, _ElementaryDataTypeMeta, array
+from ._base import ElementaryDataType, _ElementaryDataTypeMeta  # pyright: ignore[reportPrivateUsage]
 
-# TODO: eventually, come back to see if the __class_getitem__ can be moved to a base/meta class
-#       couldn't get the type hinting to work with the ElementaryDataType generic
+if TYPE_CHECKING:
+    from .numeric import UDINT, UINT, USINT
 
 
 class IntDataType(ElementaryDataType[int], int, metaclass=_ElementaryDataTypeMeta):
-    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
-        return array(cls, item)
-
-    def __format__(self, format_spec):
+    @override
+    def __format__(self, format_spec: str):
         if format_spec == "@":
             char_count = 2 + 2 * self.size  # 2 per byte + '0x'
             format_spec = f"#0{char_count}x"
@@ -30,54 +29,63 @@ class IntDataType(ElementaryDataType[int], int, metaclass=_ElementaryDataTypeMet
 
 
 class BoolDataType(ElementaryDataType[bool], int, metaclass=_ElementaryDataTypeMeta):
-    def __new__(cls, value: int, *args, **kwargs):
+    def __new__(cls, value: int, *args: Any, **kwargs: Any):
         return super().__new__(cls, True if value else False, *args, **kwargs)
 
-    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
-        return array(cls, item)
-
+    @override
     @classmethod
-    def _encode(cls, value: bool, *args, **kwargs) -> Literal[b"\x00", b"\xff"]:
+    def _encode(cls, value: bool, *args: Any, **kwargs: Any) -> Literal[b"\x00", b"\xff"]:
         return b"\xff" if value else b"\x00"
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
         data = cls._stream_read(stream, cls.size)
         return cls(data[0])
 
+    @override
     def __repr__(self):
         return f"{self.__class__.__name__}({bool(self)})"
 
 
-class FloatDataType(ElementaryDataType[float], float, metaclass=_ElementaryDataTypeMeta):
-    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
-        return array(cls, item)
+class FloatDataType(ElementaryDataType[float], float, metaclass=_ElementaryDataTypeMeta): ...
 
 
-class StringDataType(ElementaryDataType[str], str, metaclass=_ElementaryDataTypeMeta):  # type: ignore
+type StrLenT = "UDINT | UINT | USINT"
+
+
+class _StringTypeMeta(_ElementaryDataTypeMeta):
+    len_type: type[StrLenT]  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    @property
+    def size(cls) -> int:
+        raise DataError("string types do not have a static size")
+
+
+class StringDataType(ElementaryDataType[str], str, metaclass=_StringTypeMeta):
     """
     Base class for any string type
     """
 
-    len_type: type[IntDataType]  #: data type of the string length
+    len_type: type[StrLenT]  #: data type of the string length
     encoding: str = "iso-8859-1"
 
-    def __class_getitem__(cls, item: ArrayLenT) -> type[Array[Self, ArrayLenT]]:
-        return array(cls, item)
-
+    @override
     @classmethod
-    def _encode(cls, value: str, *args, **kwargs) -> bytes:
+    def _encode(cls, value: str, *args: Any, **kwargs: Any) -> bytes:
         return cls.len_type.encode(len(value)) + value.encode(cls.encoding)
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
-        str_len: IntDataType = cls.len_type.decode(stream)
+        str_len: StrLenT = cls.len_type.decode(stream)
         if str_len == 0:
             return cls("")
         str_data = cls._stream_read(stream, str_len)
 
         return cls(str_data.decode(cls.encoding))
 
+    @override
     def __str__(self):
         return str.__str__(self)
 
@@ -85,23 +93,24 @@ class StringDataType(ElementaryDataType[str], str, metaclass=_ElementaryDataType
 class BitArrayType(IntDataType):
     bits: tuple[int, ...]
 
-    def __new__(cls, value: int | Sequence[int], *args, **kwargs):
+    def __new__(cls, value: int | Sequence[int], *args: Any, **kwargs: Any):
         try:
             if not isinstance(value, int):
                 value = cls._from_bits(value)
         except Exception:
             raise DataError(f"invalid value for {cls}: {value!r}")
-        obj = super().__new__(cls, value)  # type: ignore
+        obj = super().__new__(cls, value)
         return obj
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.bits = self._to_bits(self)
 
+    @override
     @classmethod
-    def _encode(cls, value: int | Sequence[Any], *args, **kwargs) -> bytes:
+    def _encode(cls, value: int | Sequence[Any], *args: Any, **kwargs: Any) -> bytes:
         if not isinstance(value, int):
             value = cls._from_bits(value)
-        return super()._encode(value)
+        return super()._encode(cast(Self, value))
 
     @classmethod
     def _to_bits(cls, value: int) -> tuple[int, ...]:
@@ -118,5 +127,6 @@ class BitArrayType(IntDataType):
 
         return _value
 
+    @override
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.bits!r})"

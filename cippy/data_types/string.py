@@ -4,11 +4,11 @@ import reprlib
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from io import BytesIO
-from typing import Self
+from typing import ClassVar, Self, override, Any
 
 from ..exceptions import BufferEmptyError, DataError
-from ._base import BufferT, DataType, ElementaryDataType, _ElementaryDataTypeMeta, as_stream, buff_repr
-from ._core_types import StringDataType
+from ._base import BufferT, DataType, ElementaryDataType, as_stream, buff_repr
+from ._core_types import StringDataType, StrLenT
 from .numeric import UDINT, UINT, USINT
 
 __all__ = ("LONG_STRING", "STRING", "STRING2", "STRINGN", "STRINGI", "SHORT_STRING", "CSTRING")
@@ -19,7 +19,7 @@ class LONG_STRING(StringDataType):  # noqa
     Character string, 1-byte per character, 4-byte length
     """
 
-    len_type = UDINT
+    len_type: type[StrLenT] = UDINT
 
 
 class STRING(StringDataType):
@@ -27,8 +27,8 @@ class STRING(StringDataType):
     Character string, 1-byte per character, 2-byte length
     """
 
-    code = 0xD0  #: 0xD0
-    len_type = UINT
+    code: ClassVar[int] = 0xD0  #: 0xD0
+    len_type: type[StrLenT] = UINT
 
 
 class STRING2(StringDataType):
@@ -36,9 +36,9 @@ class STRING2(StringDataType):
     character string, 2-bytes per character
     """
 
-    code = 0xD5  #: 0xD5
-    len_type = UINT
-    encoding = "utf-16-le"
+    code: ClassVar[int] = 0xD5  #: 0xD5
+    len_type: type[StrLenT] = UINT
+    encoding: str = "utf-16-le"
 
 
 class STRINGN(StringDataType):  # noqa
@@ -46,7 +46,7 @@ class STRINGN(StringDataType):  # noqa
     character string, n-bytes per character
     """
 
-    code = 0xD9  #: 0xD9
+    code: ClassVar[int] = 0xD9  #: 0xD9
 
     class Encoding(IntEnum):
         """
@@ -65,7 +65,7 @@ class STRINGN(StringDataType):  # noqa
 
     encoding: str = "utf-8"
 
-    def __new__(cls, value: str, encoding: Encoding = Encoding.utf_8, *args, **kwargs) -> STRINGN:
+    def __new__(cls, value: str, encoding: Encoding = Encoding.utf_8, *args: Any, **kwargs: Any) -> STRINGN:
         try:
             # skipping the __new__ behavior for StringDataType/ElementaryDataType
             # so that encoding can be an instance var and still be passed thru to the encode
@@ -77,8 +77,9 @@ class STRINGN(StringDataType):  # noqa
         obj.__encoded_value__ = cls.encode(value, encoding, *args, **kwargs)
         return obj
 
+    @override
     @classmethod
-    def encode(cls, value: str, encoding: Encoding | str = Encoding.utf_8, *args, **kwargs) -> bytes:
+    def encode(cls, value: str, encoding: Encoding | str = Encoding.utf_8, *args: Any, **kwargs: Any) -> bytes:
         try:
             encoding = cls.Encoding(encoding) if isinstance(encoding, str) else encoding
             encoding_name = cls._encodings[encoding]
@@ -86,6 +87,7 @@ class STRINGN(StringDataType):  # noqa
         except Exception as err:
             raise DataError(f"Error encoding {value!r} as STRINGN using {encoding}") from err
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> STRINGN:
         char_size = UINT.decode(stream)
@@ -107,21 +109,16 @@ class SHORT_STRING(StringDataType):  # noqa
     character string, 1-byte per character, 1-byte length
     """
 
-    code = 0xDA  #: 0xDA
-    len_type = USINT
+    code: ClassVar[int] = 0xDA  #: 0xDA
+    len_type: type[StrLenT] = USINT
 
 
-class _StringIBase[T](DataType[T]):
-    _format = ""
-    _codes = ElementaryDataType._codes  # noqa
-
-
-class STRINGI(_StringIBase[str], metaclass=_ElementaryDataTypeMeta):
+class STRINGI(StringDataType):
     """
     international character string
     """
 
-    code = 0xDE  #: 0xDE
+    code: ClassVar[int] = 0xDE  #: 0xDE
     STRING_TYPES: dict[int, type[STRING | STRING2 | STRINGN | SHORT_STRING]] = {
         STRING.code: STRING,
         STRING2.code: STRING2,
@@ -153,10 +150,13 @@ class STRINGI(_StringIBase[str], metaclass=_ElementaryDataTypeMeta):
         utf_16_le = 1000
         utf_32_le = 1001
 
-    def __new__(cls, *args, **kwargs):
-        return super().__new__(cls)
+    __encoded_value__: bytes
 
-    def __init__(self, *strings: StrI):
+    def __new__(cls, *args: StrI, **kwargs: Any):
+        main_str, *_ = args
+        return super().__new__(cls, main_str.value)
+
+    def __init__(self, *strings: StrI, **kwargs: Any):
         self._strs: tuple[StrI, ...] = strings
         self.__encoded_value__ = self.encode(self)
 
@@ -170,14 +170,16 @@ class STRINGI(_StringIBase[str], metaclass=_ElementaryDataTypeMeta):
 
         raise ValueError(f"invalid language: {lang}")
 
-    def __eq__(self, other):
+    @override
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, STRINGI):
             return self.__encoded_value__ == other.__encoded_value__
 
         return False
 
+    @override
     @classmethod
-    def _encode(cls, value: STRINGI, **kwargs) -> bytes:
+    def _encode(cls, value: STRINGI, **kwargs: Any) -> bytes:
         """
         Encodes ``strings`` to bytes
         """
@@ -207,10 +209,11 @@ class STRINGI(_StringIBase[str], metaclass=_ElementaryDataTypeMeta):
         except Exception as err:
             raise DataError(f"Error packing {reprlib.repr(value._strs)} as {cls.__name__}") from err
 
+    @override
     @classmethod
     def decode(cls, buffer: BufferT) -> STRINGI:
         stream = as_stream(buffer)
-        strings = []
+        strings: list[StrI] = []
         try:
             count = USINT.decode(stream)
             for _ in range(count):
@@ -243,6 +246,7 @@ class STRINGI(_StringIBase[str], metaclass=_ElementaryDataTypeMeta):
     ):
         return StrI(value, str_type, lang, char_set)
 
+    @override
     def __repr__(self):
         return f"{self.__class__.__name__}(strings={self._strs!r})"
 
@@ -267,10 +271,12 @@ class StrI:
 
 
 class CSTRING(StringDataType):
+    @override
     @classmethod
-    def _encode(cls, value: str, *args, **kwargs) -> bytes:
+    def _encode(cls, value: str, *args: Any, **kwargs: Any) -> bytes:
         return value.encode(cls.encoding) + b"\x00"
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
         if len(stream.getvalue()) == stream.tell():
@@ -280,8 +286,9 @@ class CSTRING(StringDataType):
         if str_len == -1:
             raise DataError("null byte not found")
         if str_len == 0:
-            return cls("")
-
-        str_data = cls._stream_read(stream, str_len)
-        cls._stream_read(stream, 1)
-        return cls(str_data.decode(cls.encoding))
+            val = cls("")
+        else:
+            str_data = cls._stream_read(stream, str_len)
+            val = cls(str_data.decode(cls.encoding))
+        _ = cls._stream_read(stream, 1)  # consume null
+        return val

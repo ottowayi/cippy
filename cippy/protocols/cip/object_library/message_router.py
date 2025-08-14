@@ -1,6 +1,6 @@
-from typing import ClassVar, cast
+from typing import ClassVar, cast, Tuple
 
-from cippy.data_types import BYTES, EPATH, UINT, USINT, attr, Struct
+from cippy.data_types import BYTES, EPATH, UINT, USINT, array, Array
 
 from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, service
 from ..msg_router_services import message_router_service
@@ -15,13 +15,13 @@ class MessageRouter(CIPObject):
     class_code = 0x02
 
     #: List of supported objects (class codes)
-    object_list = CIPAttribute(id=1, data_type=UINT[UINT], get_all_instance=True)
+    object_list = CIPAttribute(id=1, data_type=array(UINT, UINT), get_all_instance=True)
     #: Max number of supported connections
     num_available = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Number of currently active connections
     num_active = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: List of connection ids for active connections
-    active_connections = CIPAttribute(id=4, data_type=UINT[...], get_all_instance=True)
+    active_connections = CIPAttribute(id=4, data_type=array(UINT, ...), get_all_instance=True)
 
     SYMBOLIC_TRANSLATION_SERVICE_ID: ClassVar[USINT] = USINT(0x4B)
 

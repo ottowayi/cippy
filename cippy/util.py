@@ -3,12 +3,12 @@ Various utility functions.
 """
 
 from dataclasses import dataclass, Field, field
-from typing import Literal, dataclass_transform, Generator, Self
+from typing import Literal, dataclass_transform, Self, overload, override, Any
 from enum import Enum, IntEnum
-from typing_extensions import overload
+from collections.abc import Generator
 
 
-def cycle(stop, start=0) -> Generator[int, None, None]:
+def cycle(stop: int, start: int = 0) -> Generator[int, None, None]:
     while True:
         yield from range(start, stop)
 
@@ -20,13 +20,13 @@ class DataclassMeta(type):
     also require the dataclass decorator.
     """
 
-    def __new__(mcs, name: str, bases: tuple, cls_dict: dict, **kwargs):
+    def __new__(mcs, name: str, bases: tuple[type, ...], cls_dict: dict[str, Any], **kwargs: Any):
         cls = super().__new__(mcs, name, bases, cls_dict)
         return dataclass(cls, **kwargs)  # type: ignore
 
 
 class StatusEnum(int, Enum):
-    description: str
+    description: str  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __new__(cls, value: int, description: str = "UNKNOWN") -> Self:
         obj = int.__new__(cls, value)
@@ -34,6 +34,7 @@ class StatusEnum(int, Enum):
         obj.description = description
         return obj
 
+    @override
     def __repr__(self):
         return f"{self.value:#04x}: {self.description!r}"
 
@@ -43,16 +44,17 @@ class IntEnumX(IntEnum):
     Just an IntEnum with a better repr
     """
 
+    @override
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}.{self.name}"
 
 
 class _PredefinedMeta[T](type):
-    __value_lookup__: dict[T, str]
-    __name_lookup__: dict[str, T]
+    __value_lookup__: dict[T, str]  # pyright: ignore[reportUninitializedInstanceVariable]
+    __name_lookup__: dict[str, T]  # pyright: ignore[reportUninitializedInstanceVariable]
     __default_name__: str | None = None
 
-    def __new__(mcs, name, bases, clsdict, **kwargs):
+    def __new__(mcs, name: str, bases: tuple["type[PredefinedValues]", ...], clsdict: dict[str, Any], **kwargs: Any):
         cls = super().__new__(mcs, name, bases, clsdict)
 
         lookup: dict[str, T] = {}
@@ -76,10 +78,10 @@ class _PredefinedMeta[T](type):
     def get(cls, x: T | str, use_default: bool = True) -> str | T | None:
         return cls.__value_lookup__.get(x, cls.__name_lookup__.get(x, cls.__default_name__ if use_default else None))  # type: ignore
 
-    def get_name(cls, value, use_default: bool = True) -> str | None:
+    def get_name(cls, value: Any, use_default: bool = True) -> str | None:
         return cls.__value_lookup__.get(value, cls.__default_name__ if use_default else None)
 
-    def __contains__(cls, value) -> bool:
+    def __contains__(cls, value: Any) -> bool:
         return value in (cls.__value_lookup__ | cls.__name_lookup__)
 
     def keys(cls):
@@ -109,8 +111,8 @@ class _PredefinedMeta[T](type):
             return {k: v for k, v in cls.__name_lookup__.items()}
 
 
-class PredefinedValues(metaclass=_PredefinedMeta):
+class PredefinedValues(metaclass=_PredefinedMeta):  # pyright: ignore[reportMissingTypeArgument]
     __default_name__: str | None = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: Any, **kwargs: Any):
         raise TypeError("Cannot instantiate a PredefinedValues class")

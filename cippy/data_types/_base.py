@@ -1,6 +1,6 @@
 import types
-from collections.abc import Mapping
-from dataclasses import Field, dataclass, field, fields, make_dataclass
+from collections.abc import Mapping, Generator, Sequence
+from dataclasses import Field, field, fields, make_dataclass, dataclass
 from inspect import isclass
 from io import BytesIO
 from struct import calcsize, pack, unpack
@@ -11,39 +11,30 @@ from typing import (
     Any,
     Callable,
     ClassVar,
-    Generator,
     Literal,
     Self,
-    Sequence,
     TypeAliasType,
-    Union,
+    TypeVar,
+    Union,  # pyright: ignore[reportDeprecated]
     cast,
     dataclass_transform,
     get_args,
     get_origin,
     get_type_hints,
     overload,
+    override,
 )
-from typing_extensions import reveal_type
 
 from cippy._logging import get_logger
 from cippy.exceptions import BufferEmptyError, DataError
 from cippy.util import DataclassMeta, PredefinedValues
 
 if TYPE_CHECKING:
-    from .cip import CIPSegment
+    from ._core_types import IntDataType
 
-type ArrayableT = (
-    Struct
-    | ElementaryDataType[int]
-    | ElementaryDataType[float]
-    | ElementaryDataType[bool]
-    | ElementaryDataType[str]
-    | ElementaryDataType[bytes]
-    | "CIPSegment"
-)
+# pyright: reportPrivateUsage=false
+
 type ElementaryPyType = int | float | bool | str | bytes
-type ArrayLenT = None | type[ElementaryDataType[int]] | int | EllipsisType
 type BufferT = BytesIO | bytes | BYTES
 
 
@@ -68,11 +59,12 @@ def as_stream(buffer: BufferT) -> BytesIO:
 
 
 class _DataTypeMeta(type):
+    @override
     def __repr__(cls):
         return cls.__name__
 
 
-class DataType[T](metaclass=_DataTypeMeta):
+class DataType(metaclass=_DataTypeMeta):
     """
     Base class to represent a CIP data type.
     Instances of a type are only used when defining the
@@ -95,7 +87,7 @@ class DataType[T](metaclass=_DataTypeMeta):
     size: ClassVar[int] = 0
     __log = get_logger(__qualname__)
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: Any, **kwargs: Any):
         if super().__new__ is object.__new__:
             return super().__new__(cls)
         return super().__new__(cls, *args, **kwargs)
@@ -104,7 +96,7 @@ class DataType[T](metaclass=_DataTypeMeta):
         return self.__class__.encode(self)
 
     @classmethod
-    def encode(cls, value: Self | T, *args, **kwargs) -> bytes:
+    def encode(cls: type[Self], value: Self, *args: Any, **kwargs: Any) -> bytes:
         """
         Serializes a Python object ``value`` to ``bytes``.
 
@@ -117,7 +109,8 @@ class DataType[T](metaclass=_DataTypeMeta):
             raise DataError(f"Error packing {value!r} as {cls.__name__}") from err
 
     @classmethod
-    def _encode(cls, value: Self | T, *args, **kwargs) -> bytes: ...
+    def _encode(cls: type[Self], value: Self, *args: Any, **kwargs: Any) -> bytes:  # pyright: ignore[reportUnusedParameter]
+        raise NotImplementedError
 
     @classmethod
     def decode(cls, buffer: BufferT) -> Self:
@@ -140,10 +133,11 @@ class DataType[T](metaclass=_DataTypeMeta):
             raise DataError(f"Error unpacking {buff_repr(buffer)} as {cls.__name__}") from err
 
     @classmethod
-    def _decode(cls, stream: BytesIO) -> Self: ...
+    def _decode(cls, stream: BytesIO) -> Self:  # pyright: ignore[reportUnusedParameter]
+        raise NotImplementedError
 
     @classmethod
-    def _stream_read(cls, stream: BytesIO, size: int) -> bytes:
+    def _stream_read(cls, stream: BytesIO, size: "int | IntDataType") -> bytes:
         """
         Reads `size` bytes from `stream`.
         Raises `BufferEmptyError` if stream returns no data.
@@ -153,7 +147,7 @@ class DataType[T](metaclass=_DataTypeMeta):
         return data
 
     @classmethod
-    def _stream_peek(cls, stream: BytesIO, size: int) -> bytes:
+    def _stream_peek(cls, stream: BytesIO, size: "int | IntDataType") -> bytes:
         return stream.getvalue()[stream.tell() : stream.tell() + size]
 
     def __rich__(self) -> str:
@@ -161,28 +155,24 @@ class DataType[T](metaclass=_DataTypeMeta):
 
 
 class _ElementaryDataTypeMeta(_DataTypeMeta):
-    code: int
-    size: int
-    _format: str
-    _base_type: type[ElementaryPyType]
-    _codes: dict[int, type]
-
-    def __new__(mcs, name, bases, classdict):
-        klass = super().__new__(mcs, name, bases, classdict)
-
-        if cls_args := get_args(klass.__orig_bases__[0]):  # type: ignore
-            klass._base_type = cls_args[0]
+    def __new__[T: ElementaryPyType](
+        mcs, name: str, bases: "tuple[type[ElementaryDataType[T]], ...]", classdict: dict[str, Any]
+    ):
+        _klass = super().__new__(mcs, name, bases, classdict)
+        klass = cast("type[ElementaryDataType[T]]", _klass)
+        if cls_args := get_args(klass.__orig_bases__[0]):  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+            klass._base_type = cls_args[0]  # pyright: ignore[reportGeneralTypeIssues]
 
         if not klass.size and klass._format:
             klass.size = calcsize(klass._format)
 
         if klass.code:
-            klass._codes[klass.code] = klass
+            klass._codes[klass.code] = klass  # pyright: ignore[reportArgumentType]
 
         return klass
 
 
-class ElementaryDataType[T: ElementaryPyType](DataType[T], metaclass=_ElementaryDataTypeMeta):
+class ElementaryDataType[T: ElementaryPyType](DataType, metaclass=_ElementaryDataTypeMeta):
     """
     Type that represents a single primitive value in CIP.
     """
@@ -190,42 +180,77 @@ class ElementaryDataType[T: ElementaryPyType](DataType[T], metaclass=_Elementary
     code: ClassVar[int] = 0x00  #: CIP data type identifier
     size: ClassVar[int] = 0  #: size of type in bytes
     _format: ClassVar[str] = ""
-    _base_type: type[T]
+    _base_type: type[T]  # pyright: ignore[reportUninitializedInstanceVariable] - set by metaclass
 
     # keeps track of all subclasses using the cip type code
-    _codes: dict[int, type[T]] = {}
+    _codes: ClassVar[dict[int, type[ElementaryPyType]]] = {}
 
-    def __new__(cls, value, *args, **kwargs):
+    def __new__(cls: type[Self], value: T | Self, *args: Any, **kwargs: Any):
         try:
-            obj = super().__new__(cls, value, *args, **kwargs)  # type: ignore
+            obj = super().__new__(cls, value, *args, **kwargs)
         except Exception as err:
             raise DataError(f"invalid value for {cls}: {value!r}") from err
 
         # encode at the same time we create the object, removes the need for validation
         # since if it can be encoded, it's valid.
-        obj.__encoded_value__ = cls.encode(value, *args, **kwargs)
+        obj.__encoded_value__ = cls.encode(obj, *args, **kwargs)
         return obj
 
+    @override
     def __bytes__(self) -> bytes:
         return self.__encoded_value__
 
+    @override
     @classmethod
-    def _encode(cls, value: Self | T, *args, **kwargs) -> bytes:
+    def encode(cls, value: Self | T, *args: Any, **kwargs: Any) -> bytes:
+        return super().encode(cast(Self, value), *args, **kwargs)
+
+    @override
+    @classmethod
+    def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         return pack(cls._format, value)
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
         data = cls._stream_read(stream, cls.size)
         return cls(unpack(cls._format, data)[0])
 
+    @override
     def __repr__(self):
         return f"{self.__class__.__name__}({self._base_type.__repr__(self)})"  # noqa # type: ignore
 
+    @override
     def __str__(self):
         return self._base_type.__repr__(self)  # type: ignore
 
 
-def _process_typehint(typ, _field) -> type[DataType]:
+def _len_ref_callable(value: "Array[DataType, ArrayLenT]") -> int:
+    return len(value)
+
+
+@dataclass
+class LenRef:
+    name: str
+    encode_func: "Callable[[Array[DataType, ArrayLenT]], int]"
+    decode_func: "Callable[[Array[DataType, ArrayLenT]], int]"
+
+
+@dataclass
+class SizeRef:
+    name: str = field(init=False)
+    encode_func: "Callable[[int], int]"
+    decode_func: "Callable[[int], int]"
+
+
+@dataclass
+class ConditionalOn:
+    name: str
+    encode_func: "Callable[[DataType], bool]"
+    decode_func: "Callable[[DataType], bool]"
+
+
+def _process_typehint(typ: Any, _field: Field[type[DataType]]) -> type[DataType]:
     if isclass(typ) and issubclass(typ, DataType):
         return typ
 
@@ -234,7 +259,7 @@ def _process_typehint(typ, _field) -> type[DataType]:
     if origin is Annotated:
         _type, *extra = get_args(typ)
         _type_origin = get_origin(_type)
-        if isclass(_type_origin) and issubclass(_type_origin, ArrayType):
+        if isclass(_type_origin) and issubclass(_type_origin, Array):
             element_type, ary_len = get_args(_type)
             if get_origin(element_type) is type:
                 element_type, *_ = get_args(element_type)
@@ -243,22 +268,22 @@ def _process_typehint(typ, _field) -> type[DataType]:
             if ary_len is int:
                 _ary_len = next(iter(extra), None)
                 if not isinstance(_ary_len, int):
-                    raise DataError("Annotated arrays using ArrayType[*, int] must provide an int for the next annotated arg")  # fmt: skip
+                    raise DataError("Annotated arrays using Array[*, int] must provide an int for the next annotated arg")  # fmt: skip
                 ary_len = _ary_len
-            field_type = array(cast(type[ArrayableT], element_type), ary_len)
+            field_type = array(element_type, ary_len)
         else:
             if not isclass(_type) or not issubclass(_type, DataType):
                 raise DataError(f"Annotated types must provide a DataType for the first arg: {_field.name}")
             field_type = _type
 
-    elif isclass(origin) and issubclass(origin, ArrayType):
+    elif isclass(origin) and issubclass(origin, Array):
         # handles 'x: ArrayType[y, z]' case
         field_type = array(*get_args(typ))
 
     return cast(type[DataType], field_type)
 
 
-def _process_fields(cls: "_StructMeta") -> ...:
+def _process_fields(cls: "type[Struct]") -> None:
     _fields = fields(cls)  # noqa
     _type_hints = get_type_hints(cls, include_extras=True)
     cls.__struct_dataclass_fields__ = {}
@@ -278,7 +303,7 @@ def _process_fields(cls: "_StructMeta") -> ...:
         elif isinstance(typ, TypeAliasType):
             field_type = _process_typehint(typ.__value__, _field)
         elif (origin := get_origin(typ)) is not None:
-            if origin in (UnionType, Union):
+            if origin in (UnionType, Union):  # pyright: ignore[reportDeprecated]
                 _type, *_ = get_args(typ)
             else:
                 _type = typ
@@ -286,21 +311,22 @@ def _process_fields(cls: "_StructMeta") -> ...:
         else:
             raise DataError(f"Unsupported annotation for struct field: {_field.name}")
 
-        if field_type is None:
+        if field_type is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise DataError(f"Failed to determine type (unsupported annotation) for field: {_field.name}")
         cls.__struct_members__[_field.name] = field_type
         if not metadata.get("reserved"):
             cls.__struct_attributes__[_field.name] = field_type
         if len_ref := metadata.get("len_ref"):
-            if not issubclass(field_type, (ArrayType, BYTES)):
+            if not issubclass(field_type, (Array, BYTES)):
                 raise DataError(f"Fields with 'len_ref' must be Arrays: {_field.name}")
-            if len_ref[0] not in cls.__struct_members__:
-                raise DataError(f"Invalid 'len_ref', {len_ref[0]} is not a previous member of the struct")
-            cls.__struct_array_length_sources__[_field.name] = len_ref
+            if len_ref.name not in cls.__struct_members__:
+                raise DataError(f"Invalid 'len_ref', {len_ref.name} is not a previous member of the struct")
+            cls.__struct_array_length_sources__[len_ref.name] = len_ref
         if size_ref := metadata.get("size_ref"):
             if cls.__struct_size_ref__ is not None:
-                raise DataError(f"'size_ref' already defined for struct field: {cls.__struct_size_ref__[0]}")
-            cls.__struct_size_ref__ = _field.name, *size_ref
+                raise DataError(f"'size_ref' already defined for struct field: {cls.__struct_size_ref__.name}")
+            size_ref.name = _field.name
+            cls.__struct_size_ref__ = size_ref
         if conditional_on := metadata.get("conditional_on"):
             if _field.default is not None:
                 raise DataError("'conditional_on' fields must provide a default of None")
@@ -324,11 +350,11 @@ def attr[T: DataType](
     default: T,
     init: Literal[True] = True,
     reserved: Literal[False] = False,
-    len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
-    size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
-    conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
+    len_ref: LenRef | str | None = None,
+    size_ref: SizeRef | bool | str = False,
+    conditional_on: ConditionalOn | str | None = None,
     fmt: str | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> T: ...
 @overload
 def attr[T: DataType](
@@ -336,22 +362,22 @@ def attr[T: DataType](
     default: DataType | None = None,
     reserved: Literal[True] = True,
     init: Literal[False] = False,
-    len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
-    size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
-    conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
+    len_ref: LenRef | str | None = None,
+    size_ref: SizeRef | bool | str = False,
+    conditional_on: ConditionalOn | str | None = None,
     fmt: str | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> Any: ...
 def attr[T: DataType](
     *,
     default: T | None = None,
     init: bool = True,
     reserved: bool = False,
-    len_ref: str | tuple[str, Callable[[int], int], Callable[[int], int]] | None = None,
-    size_ref: bool | tuple[Callable[[int], int], Callable[[int], int]] = False,
-    conditional_on: str | tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]] | None = None,
+    len_ref: LenRef | str | None = None,
+    size_ref: SizeRef | bool | str = False,
+    conditional_on: ConditionalOn | str | None = None,
     fmt: str | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> Any | T:
     """
     Customize behavior of struct attributes (and their underlying dataclass fields)
@@ -389,15 +415,15 @@ def attr[T: DataType](
     if default is not None:
         field_kwargs["default"] = default
     if len_ref is not None and isinstance(len_ref, str):
-        len_ref = len_ref, _default_ref_callable, _default_ref_callable
+        len_ref = LenRef(len_ref, _len_ref_callable, _len_ref_callable)
     field_kwargs["metadata"]["len_ref"] = len_ref
     if size_ref and isinstance(size_ref, bool):
-        size_ref = _default_ref_callable, _default_ref_callable
+        size_ref = SizeRef(_default_ref_callable, _default_ref_callable)
     field_kwargs["metadata"]["size_ref"] = size_ref
     if conditional_on is not None:
         field_kwargs["default"] = default
         if isinstance(conditional_on, str):
-            conditional_on = conditional_on, _default_conditional_callable, _default_conditional_callable
+            conditional_on = ConditionalOn(conditional_on, _default_conditional_callable, _default_conditional_callable)
     field_kwargs["metadata"]["conditional_on"] = conditional_on
     if fmt is not None:
         field_kwargs["metadata"]["fmt"] = fmt
@@ -405,34 +431,37 @@ def attr[T: DataType](
     return field(**field_kwargs, **kwargs)
 
 
+type StructValuesType = dict[str, DataType] | Sequence[DataType]
+
+# Types that the Array length may be
+type ArrayLenT = None | type[ElementaryDataType[int]] | int | EllipsisType
+
+
 @dataclass_transform(field_specifiers=(attr,))
-class _StructMeta(DataclassMeta, _DataTypeMeta):
+class _StructMeta(DataclassMeta, _DataTypeMeta):  # pyright: ignore[reportUnsafeMultipleInheritance]
     __struct_members__: dict[str, type[DataType]]
     __struct_attributes__: dict[str, type[DataType]]
-    __struct_dataclass_fields__: dict[str, Field]
-    __struct_array_length_sources__: dict[str, tuple[str, Callable[[DataType], int], Callable[[DataType], int]]]
-    __struct_conditional_attributes__: dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
-    __struct_size_ref__: tuple[str, Callable[[DataType], int], Callable[[DataType], int]] | None
+    __struct_dataclass_fields__: dict[str, Field[DataType]]
+    __struct_array_length_sources__: dict[str, LenRef]
+    __struct_conditional_attributes__: dict[str, ConditionalOn]
+    __struct_size_ref__: SizeRef | None
 
     __parent_struct__: "tuple[Struct, str] | None"
-    __parent_array__: "tuple[Array, int] | None"
+    __parent_array__: "tuple[Array[DataType, ArrayLenT], int] | None"
     __encoded_fields__: dict[str, bytes]
     __initialized__: bool
 
-    def __new__(mcs, name: str, bases: tuple, cls_dict: dict):
-        repr = True
+    def __new__(mcs, name: str, bases: tuple["type[Struct]", ...], cls_dict: dict[str, Any]):
+        _repr = True
         if any(getattr(b, "__field_descriptions__", None) for b in bases) or cls_dict.get("__field_descriptions__"):
-            repr = False
-        cls = super().__new__(mcs, name, bases, cls_dict, repr=repr)
+            _repr = False
+        cls = cast("type[Struct]", super().__new__(mcs, name, bases, cls_dict, repr=_repr))
         _process_fields(cls)
         return cls
 
     @property
     def size(cls) -> int:
         return sum(sz for typ in cls.__struct_members__.values() if (sz := typ.size) != -1)
-
-
-type StructValuesType = dict[str, DataType] | Sequence[DataType]
 
 
 @dataclass_transform(field_specifiers=(attr,))
@@ -448,23 +477,19 @@ class Struct(DataType, metaclass=_StructMeta):
     #: excluding reserved or private members not meant for users to interact with
     __struct_attributes__: ClassVar[dict[str, type[DataType]]]
     #: map of field names to dataclass Field objects, to avoid having to call fields() all the time
-    __struct_dataclass_fields__: ClassVar[dict[str, Field]]
+    __struct_dataclass_fields__: ClassVar[dict[str, Field[DataType]]]
     #: map of array field names to the field name that is the source of the length of the array
-    __struct_array_length_sources__: ClassVar[
-        dict[str, tuple[str, Callable[[DataType], int], Callable[[DataType], int]]]
-    ]
-    __struct_size_ref__: ClassVar[tuple[str, Callable[[int], int], Callable[[int], int]] | None]
-    __struct_conditional_attributes__: ClassVar[
-        dict[str, tuple[str, Callable[[DataType], bool], Callable[[DataType], bool]]]
-    ]
+    __struct_array_length_sources__: ClassVar[dict[str, LenRef]]
+    __struct_size_ref__: ClassVar[SizeRef | None]
+    __struct_conditional_attributes__: ClassVar[dict[str, ConditionalOn]]
     #: map of field names to field values and associated descriptions, these
     __field_descriptions__: ClassVar[dict[str, dict[DataType | int | None, str] | type[PredefinedValues]]] = {}
 
-    def __post_init__(self, *args, **kwargs) -> None:
+    def __post_init__(self, *args: Any, **kwargs: Any) -> None:
         for member, typ in self.__struct_members__.items():
-            if issubclass(typ, (Struct, ArrayType)):
+            if issubclass(typ, (Struct, Array)):
                 getattr(self, member).__parent_struct__ = (self, member)
-            if self.__struct_size_ref__ and member == self.__struct_size_ref__[0]:
+            if self.__struct_size_ref__ and member == self.__struct_size_ref__.name:
                 continue
             value = getattr(self, member)
             if not isinstance(value, typ) and (
@@ -475,27 +500,26 @@ class Struct(DataType, metaclass=_StructMeta):
                     if issubclass(typ, Struct):
                         value = typ(**cast(Mapping[str, Any], value))
                     else:
-                        value = typ(value)
+                        value = typ(value)  # pyright: ignore[reportUnknownVariableType]
                 except Exception as err:
                     raise DataError(f"Type conversion error for attribute {member!r}") from err
                 else:
                     setattr(self, member, value)
-            if member not in self.__encoded_fields__:  # type: ignore
+            if member not in self.__encoded_fields__:
                 try:
                     if conditional_on := self.__struct_conditional_attributes__.get(member):
-                        ref, decode_func, encode_func = conditional_on
-                        val = bytes(value) if encode_func(getattr(self, ref)) else b""
+                        val = bytes(value) if conditional_on.encode_func(getattr(self, conditional_on.name)) else b""  # pyright: ignore[reportUnknownArgumentType]
                     else:
-                        val = bytes(value)
+                        val = bytes(value)  # pyright: ignore[reportUnknownArgumentType]
 
-                    self.__encoded_fields__[member] = bytes(val)  # type: ignore
+                    self.__encoded_fields__[member] = bytes(val)
                 except Exception as err:
                     raise DataError(f"Error encoding attribute {member!r}") from err
 
-        self.__initialized__ = True
+        self.__initialized__: bool = True
         self._update_size_ref()
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: Any, **kwargs: Any):
         self = super().__new__(cls)
         self.__parent_struct__ = None
         self.__parent_array__ = None
@@ -503,10 +527,8 @@ class Struct(DataType, metaclass=_StructMeta):
         self.__initialized__ = False
         return self
 
-    def __class_getitem__(cls, item: ArrayLenT) -> type["Array[Self, ArrayLenT]"]:
-        return array(cls, item)
-
-    def __setattr__(self, key: str, value: Any) -> None:
+    @override
+    def __setattr__(self, key: str, value: Any):
         if key.startswith("__") and key.endswith("__"):
             return super().__setattr__(key, value)
 
@@ -514,10 +536,10 @@ class Struct(DataType, metaclass=_StructMeta):
             raise AttributeError(f"{key!r} is not an attribute of struct {self.__class__.__name__}")
         typ = self.__class__.__struct_members__[key]
         if conditional_on := self.__struct_conditional_attributes__.get(key):
-            ref, decode_func, encode_func = conditional_on
-            if value is not None and not encode_func(getattr(self, ref)):
+            con_on = getattr(self, conditional_on.name)
+            if value is not None and not conditional_on.encode_func(con_on):
                 raise DataError(
-                    f"Cannot set conditional attribute {key!r} because {ref!r} indicates attribute is not present"
+                    f"Cannot set conditional attribute {key!r} because {conditional_on.name!r} indicates attribute is not present"
                 )
         if value is not None and not isinstance(value, typ):
             try:
@@ -527,22 +549,23 @@ class Struct(DataType, metaclass=_StructMeta):
                     value = typ(value)
             except Exception as err:
                 raise DataError(f"Type conversion error for attribute {key!r}") from err
+        value = cast(DataType, value)
         try:
             if len_ref := self.__struct_array_length_sources__.get(key):
-                ref, decode_func, encode_func = len_ref
-                setattr(self, ref, encode_func(len(value)))  # type: ignore
+                value = cast(Array[DataType, ArrayLenT], value)
+                setattr(self, len_ref.name, len_ref.encode_func(value))
         except Exception as err:
             raise DataError(f"Error updating length attribute for array attribute {key!r}") from err
 
         try:
             # if conditional and None, encode as empty string
-            self.__encoded_fields__[key] = bytes(value) if value is not None else b""  # type: ignore
+            self.__encoded_fields__[key] = bytes(value) if value is not None else b""
         except Exception as err:
             raise DataError(f"Error encoding attribute {key!r}") from err
         super().__setattr__(key, value)
 
-        if issubclass(typ, (Struct, ArrayType)):
-            value.__parent_struct__ = (self, key)  # type: ignore
+        if issubclass(typ, (Struct, Array)):
+            value.__parent_struct__ = (self, key)
 
         if self.__parent_struct__ is not None:
             parent, my_name = self.__parent_struct__
@@ -552,19 +575,19 @@ class Struct(DataType, metaclass=_StructMeta):
             parent, my_index = self.__parent_array__
             parent._encoded_array[my_index] = bytes(self)  # noqa
 
-        if self.__struct_size_ref__ is not None and key != self.__struct_size_ref__[0]:
+        if self.__struct_size_ref__ is not None and key != self.__struct_size_ref__.name:
             self._update_size_ref()
 
     def _update_size_ref(self) -> None:
         if self.__struct_size_ref__ is None or not self.__initialized__:
             return
-        ref_name, decode_func, encode_func = self.__struct_size_ref__
+        ref = self.__struct_size_ref__
         member_list = list(self.__struct_members__)
-        following_members = member_list[member_list.index(ref_name) + 1 :]
-        new_size = encode_func(sum(len(self.__encoded_fields__[m]) for m in following_members))  # type: ignore
-        self.__setattr__(ref_name, new_size)
+        following_members = member_list[member_list.index(ref.name) + 1 :]
+        new_size = ref.encode_func(sum(len(self.__encoded_fields__[m]) for m in following_members))
+        self.__setattr__(ref.name, new_size)
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[tuple[str, DataType], None, None]:
         yield from ((m, self[m]) for m in self.__struct_members__)
 
     def __getitem__(self, item: str) -> Self:
@@ -582,42 +605,41 @@ class Struct(DataType, metaclass=_StructMeta):
     def keys(self):
         return self.__class__.__struct_members__.keys()
 
+    @override
     def __bytes__(self: Self) -> bytes:
         return self.__class__.encode(self)
 
+    @override
     @classmethod
-    def _encode(cls: type[Self], value: Self, *args, **kwargs) -> bytes:
+    def _encode(cls: type[Self], value: Self, *args: Any, **kwargs: Any) -> bytes:
         for member in cls.__struct_members__:
             if conditional_on := cls.__struct_conditional_attributes__.get(member):
-                ref, decode_func, encode_func = conditional_on
-                ref_value = getattr(value, ref)
+                ref_value = getattr(value, conditional_on.name)
                 member_value = value.__encoded_fields__[member]
-                if encode_func(ref_value) and not member_value:
-                    raise DataError(f"conditional attribute {member!r} missing based on {ref!r} value of {member_value}")  # fmt: skip
-        return b"".join(value.__encoded_fields__[attr_name] for attr_name in cls.__struct_members__)  # type: ignore
+                if conditional_on.encode_func(ref_value) and not member_value:
+                    raise DataError(f"conditional attribute {member!r} missing based on {conditional_on.name!r} value of {member_value}")  # fmt: skip
+        return b"".join(value.__encoded_fields__[attr_name] for attr_name in cls.__struct_members__)
 
+    @override
     @classmethod
     def _decode(cls: type[Self], stream: BytesIO) -> Self:
         values: dict[str, DataType] = {}
         for name, typ in cls.__struct_members__.items():
             try:
                 if len_ref := cls.__struct_array_length_sources__.get(name):
-                    ref, decode_func, encode_func = len_ref
-                    typ = cast(type[Array[ArrayableT, int]], typ)
-                    length = decode_func(values[ref])
+                    typ = cast(type[Array[DataType, int]], typ)
+                    val = cast(Array[DataType, ArrayLenT], values[len_ref.name])
+                    length = len_ref.decode_func(val)
                     if typ is BYTES:
                         _array = BYTES[length]
                     else:
-                        _array = array(typ.element_type, length)  # type: ignore
+                        _array = array(typ.element_type, length)
                     values[name] = _array.decode(stream)
                 elif conditional_on := cls.__struct_conditional_attributes__.get(name):
-                    ref, decode_func, encode_func = conditional_on
-                    if decode_func(values[ref]):
+                    if conditional_on.decode_func(values[conditional_on.name]):
                         values[name] = typ.decode(stream)
                     else:
-                        values[name] = cast(
-                            DataType, cls.__struct_dataclass_fields__[name].default
-                        )  # could be None too, but idgaf
+                        values[name] = cast(DataType, cls.__struct_dataclass_fields__[name].default)
                 else:
                     values[name] = typ.decode(stream)
             except BufferEmptyError:
@@ -639,13 +661,13 @@ class Struct(DataType, metaclass=_StructMeta):
         members: Sequence[tuple[str, type[T]]] | Sequence[tuple[str, type[T], Field[T]]],
     ) -> type["Struct"]:
         _fields: list[tuple[str, type[T], Field[T] | None]] = []
-        member: tuple[str, type[T]] | tuple[str, type[T], Field]
+        member: tuple[str, type[T]] | tuple[str, type[T], Field[T]]
         for i, member in enumerate(members):
             if len(member) == 2:
-                _name, typ = cast(tuple[str, type[T]], member)
+                _name, typ = member
                 _field = None
             else:
-                _name, typ, _field = cast(tuple[str, type[T], Field], member)
+                _name, typ, _field = member
 
             if not _name:
                 _name = f"_reserved_attr{i}_"
@@ -663,8 +685,7 @@ class Struct(DataType, metaclass=_StructMeta):
     def __get_description__(self, field_name: str) -> str | None:
         if field_name not in self.__field_descriptions__:
             return None
-
-        return self.__field_descriptions__[field_name].get(getattr(self, field_name))
+        return self.__field_descriptions__[field_name].get(getattr(self, field_name))  # pyright: ignore[reportUnknownMemberType]
 
     def __field_reprs__(self):
         for name in self.__struct_members__:
@@ -679,26 +700,33 @@ class Struct(DataType, metaclass=_StructMeta):
             else:
                 yield f"{name}={str_value}"
 
+    @override
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(self.__field_reprs__())})"
 
-    def __rich_console__(self, console, options):
+    def __rich_console__(self, console, options):  # type: ignore
         yield self.__class__.__name__
         yield from self.__field_reprs__()
 
 
 class _ArrayMeta(_DataTypeMeta):
-    element_type: type[ArrayableT]
-    length: ArrayLenT
+    element_type: type[DataType]  # pyright: ignore[reportUninitializedInstanceVariable]
+    length: ArrayLenT  # pyright: ignore[reportUninitializedInstanceVariable]
 
+    def __new__(mcs, name: str, bases: "tuple[type[Array[DataType, ArrayLenT]], ...]", classdict: dict[str, Any]):
+        cls = cast("type[Array[DataType, ArrayLenT]]", super().__new__(mcs, name, bases, classdict))
+        return cls
+
+    @override
     def __repr__(cls) -> str:
-        if cls is ArrayType:
-            return ArrayType.__name__
+        if cls is Array:
+            return Array.__name__
         if cls.length in (Ellipsis, None):
             return f"{cls.element_type}[...]"
 
         return f"{cls.element_type}[{cls.length!r}]"
 
+    @override
     def __hash__(cls):
         return hash(type(cls))
 
@@ -706,13 +734,14 @@ class _ArrayMeta(_DataTypeMeta):
     def size(cls) -> int:
         if (
             cls.length in {None, Ellipsis}  # fmt: skip
-            or (isclass(cls.length) and issubclass(cls.length, DataType))
+            or (isclass(cls.length) and issubclass(cls.length, DataType))  # pyright: ignore[reportUnnecessaryIsInstance]
         ):
             raise DataError("cannot determine dynamic array sizes before instantiation")
         else:
             return cast(int, cls.length) * cls.element_type.size
 
-    def __eq__(self, other) -> bool:
+    @override
+    def __eq__(self, other: Any) -> bool:
         try:
             return self.element_type == other.element_type and self.length == other.length
         except Exception:
@@ -720,44 +749,40 @@ class _ArrayMeta(_DataTypeMeta):
 
 
 # keep a cache of all array types created so each type is only created once
-__ARRAY_TYPE_CACHE__: dict[tuple[type[ArrayableT], ArrayLenT], type["Array[ArrayableT, ArrayLenT]"]] = {}
+__ARRAY_TYPE_CACHE__: dict[tuple[type[DataType], ArrayLenT], type["Array[DataType, ArrayLenT]"]] = {}
 
 
-def array[ET: ArrayableT, LT: ArrayLenT](element_type: type[ET], length: LT) -> type["Array[ET, LT]"]:
+def array[TElem: DataType, TLen: ArrayLenT](element_type: type[TElem], length: TLen) -> type["Array[TElem, TLen]"]:
     """
     Creates an array type of `length` elements of `element_type`, not for use with `BYTES` type
     """
-    _type: type[ET] = element_type
-    _len: LT = length
+    _type: type[TElem] = element_type
+    _len: TLen = length
     if _len is None:
         _len = ...  # type: ignore
 
     _key = (_type, _len)
     if _key not in __ARRAY_TYPE_CACHE__:
         klass = cast(
-            type[Array[ET, LT]], type(f"{_type.__name__}Array", (Array,), dict(element_type=_type, length=_len))
+            type[Array[TElem, TLen]], type(f"{_type.__name__}Array", (Array,), dict(element_type=_type, length=_len))
         )
-        __ARRAY_TYPE_CACHE__[(_type, _len)] = klass
+        __ARRAY_TYPE_CACHE__[(_type, _len)] = klass  # type: ignore
 
-    return cast(type[Array[ET, LT]], __ARRAY_TYPE_CACHE__[_key])
+    return cast(type[Array[TElem, TLen]], __ARRAY_TYPE_CACHE__[_key])
 
     # return Array
 
 
-class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_ArrayMeta):
+class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
     """
     Base type for an array
     """
 
-    element_type: type[ElementT]
-    length: LenT
+    element_type: type[TElem]
+    length: TLen
 
-    def __new__(cls, *args, **kwargs):
-        self = super().__new__(cls)
-        self.__parent_struct__ = None  # type: ignore
-        return self
-
-    def __init__(self: Self, value: Sequence) -> None:
+    def __init__(self: Self, value: Sequence[Any]) -> None:
+        self.__parent_struct__: tuple[Struct, str] | None = None
         if isinstance(self.length, int):
             try:
                 val_len = len(value)
@@ -767,7 +792,7 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
                 if val_len != self.length:
                     raise DataError(f"Array length error: expected {self.length} items, received {len(value)}")
 
-        self._array: list[ElementT] = [self._convert_element(v) for v in value]
+        self._array: list[TElem] = [self._convert_element(v) for v in value]
         if issubclass(self.element_type, Struct):
             for i, obj in enumerate(self._array):
                 obj.__parent_array__ = (self, i)  # type: ignore
@@ -775,105 +800,111 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
         self._encoded_array = [bytes(x) for x in self._array]  # type: ignore
 
     @property
-    def size(self) -> int:  # pyright: ignore [reportIncompatibleVariableOverride]
-        if isclass(self.length) and issubclass(self.length, DataType):
+    def size(self) -> int:  # pyright: ignore[reportIncompatibleVariableOverride, reportImplicitOverride]
+        if isclass(self.length) and issubclass(self.length, DataType):  # pyright: ignore[reportUnnecessaryIsInstance]
             return self.length.size + len(self._array) * self.element_type.size
         else:
             return len(self._array) * self.element_type.size
 
-    def _convert_element(self, value) -> ElementT:
+    def _convert_element(self, value: Any) -> TElem:
         if not isinstance(value, self.element_type):
             try:
-                val: ElementT = self.element_type(value)  # type: ignore
+                val: TElem = self.element_type(value)  # type: ignore
             except Exception as err:
                 raise DataError("Error converting element:") from err
         else:
-            val = cast(ElementT, value)
+            val = cast(TElem, value)
         return val
 
-    def __iter__(self) -> Generator[ElementT, None, None]:
+    def __iter__(self) -> Generator[TElem, None, None]:
         yield from self._array
 
-    def __reversed__(self) -> Generator[ElementT, None, None]:
+    def __reversed__(self) -> Generator[TElem, None, None]:
         yield from reversed(self._array)
 
+    @override
     def __hash__(self):
         return hash((self.length, self.element_type, self._array))
 
-    def __contains__(self, item):
+    def __contains__(self, item: Any) -> bool:
         return item in self._array
 
     def __len__(self) -> int:
         return len(self._array)
 
     @overload
-    def __getitem__(self, item: int) -> ElementT: ...
+    def __getitem__(self, item: int) -> TElem: ...
 
     @overload
-    def __getitem__(self, item: slice) -> "Array[ElementT, int]": ...
+    def __getitem__(self, item: slice) -> "Array[TElem, int]": ...
 
-    def __getitem__(self, item: slice | int) -> "Array[ElementT, int] | ElementT":
+    def __getitem__(self, item: slice | int) -> "Array[TElem, int] | TElem":
         if isinstance(item, slice):
             items = self._array[item]
-            return cast(Array[ElementT, int], array(self.element_type, len(items))(items))
+            return cast(Array[TElem, int], array(self.element_type, len(items))(items))
         return self._array[item]
 
-    def __setitem__(self, item: int | slice, value) -> None:
+    def __setitem__(self, item: int | slice, value: Any) -> None:
         try:
             if isinstance(item, slice):
                 self._array[item] = (self._convert_element(v) for v in value)
-                self._encoded_array[item] = (bytes(x) for x in self._array[item])  # type: ignore
+                self._encoded_array[item] = (bytes(x) for x in self._array[item])
             else:
                 self._array[item] = self._convert_element(value)
-                self._encoded_array[item] = bytes(self._array[item])  # type: ignore
+                self._encoded_array[item] = bytes(self._array[item])
 
-            if self.__parent_struct__ is not None:  # type: ignore
-                parent, my_name = self.__parent_struct__  # type: ignore
+            if self.__parent_struct__ is not None:
+                parent, my_name = self.__parent_struct__
                 parent.__setattr__(my_name, self)
-                ...
         except Exception as err:
             raise DataError("Failed to set item") from err
 
+    @override
     def __bytes__(self) -> bytes:
         return self.__class__.encode(self)
 
-    def __eq__(self, other):
+    @override
+    def __eq__(self, other: Any) -> bool:
         try:
-            return self._array == other._array  # noqa
-        except Exception:  # noqa
+            return self._array == other._array
+        except Exception:
             return False
 
+    @override
     @classmethod
-    def _encode(cls, value: Self, *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         encoded_elements = b"".join(value._encoded_array)
-        if isclass(value.length) and issubclass(value.length, DataType):
+        if isclass(value.length) and issubclass(value.length, DataType):  # pyright: ignore[reportUnnecessaryIsInstance]
             return bytes(value.length(len(value))) + encoded_elements
 
         return encoded_elements
 
     @classmethod
-    def _decode_all(cls, stream: BytesIO, *args, **kwargs) -> list[ElementT]:
-        _array = []
+    def _decode_all(cls, stream: BytesIO, *args: Any, **kwargs: Any) -> list[TElem]:
+        _array: list[TElem] = []
         while True:
             try:
-                _array.append(cls.element_type.decode(stream, *args, **kwargs))
+                typ: type[TElem] = cast(type[TElem], cls.element_type)
+                value: TElem = typ.decode(stream, *args, **kwargs)
+                _array.append(value)
             except BufferEmptyError:
                 break
         return _array
 
+    @override
     @classmethod
-    def decode(cls, buffer: BufferT, *args, **kwargs) -> Self:
+    def decode(cls, buffer: BufferT, *args: Any, **kwargs: Any) -> Self:
         try:
             stream = as_stream(buffer)
             if cls.length in {None, Ellipsis}:
                 return cls(cls._decode_all(stream, *args, **kwargs))
 
-            if isclass(cls.length) and issubclass(cls.length, ElementaryDataType):
+            if isclass(cls.length) and issubclass(cls.length, ElementaryDataType):  # pyright: ignore[reportUnnecessaryIsInstance]
                 _len = cls.length.decode(stream)
             else:
                 _len = cls.length
-
-            _val = [cls.element_type.decode(stream, *args, **kwargs) for _ in range(cast(int, _len))]
+            typ = cast(type[TElem], cls.element_type)
+            _val = [typ.decode(stream, *args, **kwargs) for _ in range(cast(int, _len))]
 
             return cls(_val)
         except Exception as err:
@@ -884,37 +915,34 @@ class ArrayType[ElementT: ArrayableT, LenT: ArrayLenT](DataType, metaclass=_Arra
                     f"Error unpacking into {cls.element_type}[{cls.length}] from {buff_repr(buffer)}"
                 ) from err
 
+    @override
     def __repr__(self):
         return f"{self.__class__!r}({self._array!r})"
 
-
-class Array[ET: ArrayableT, LT: ArrayLenT](ArrayType[ET, LT]):
-    """
-    for use in type annontations only, ArrayType is the actual base class for arrays
-    """
-
-    def __class_getitem__(cls, item):
-        if isinstance(item, tuple):
-            element_type, len_type = item
-        else:
-            element_type, len_type = item, ...  # type: ignore
-
+    # fmt: off
+    @overload
+    def __class_getitem__[TE: DataType, TL: ArrayLenT](cls, item: tuple[type[TE], TL]) -> "type[Array[TE, TL]]":  ...
+    @overload
+    def __class_getitem__(cls, item: tuple[TypeVar, Any]) ->  GenericAlias: ...
+    def __class_getitem__[TE: DataType, TL: ArrayLenT](cls, item: tuple[type[TE], TL] | tuple[TypeVar, Any]) -> "type[Array[TE, TL]] | GenericAlias":
+    #fmt: on
+        element_type, len_type = item
         if (
             isclass(element_type)
-            and issubclass(element_type, DataType)
+            and issubclass(element_type, DataType)  # pyright: ignore[reportUnnecessaryIsInstance]
             and (
                 len_type in (None, ...)
                 or isinstance(len_type, int)
-                or (isclass(len_type) and issubclass(len_type, int))
+                or (isclass(len_type) and issubclass(len_type, DataType) and issubclass(len_type, int))
             )
         ):
-            element_type: type[ET]
-            len_type: LT
-            return array(element_type, len_type)  # type: ignore
+            _element_type = cast(type[TE], element_type)
+            _len_type = cast(TL, len_type)
+            return array(_element_type, _len_type)
         return GenericAlias(Array, (element_type, len_type))
 
 
-__BYTES_TYPE_CACHE__: dict[tuple[int, type[ElementaryDataType[int]] | None], type["BYTES"]] = {}
+__BYTES_TYPE_CACHE__: "dict[tuple[int, type[IntDataType] | None], type[BYTES]]" = {}
 
 
 class BYTES(ElementaryDataType[bytes], bytes, metaclass=_ElementaryDataTypeMeta):  # type: ignore
@@ -925,14 +953,14 @@ class BYTES(ElementaryDataType[bytes], bytes, metaclass=_ElementaryDataTypeMeta)
     b/c we're overriding the bytes behavior to return BYTES not str
     """
 
-    size: int = -1
-    _int_type: type[ElementaryDataType[int]] | None = None
+    size: ClassVar[int] = -1
+    _int_type: "type[IntDataType] | None" = None
 
     # so this type can pretend to be an array sometimes
     element_type: type["BYTES"]  # set below
     length: None = None
 
-    def __new__(cls, value: bytes | int, *args, **kwargs):
+    def __new__(cls, value: bytes | int, *args: Any, **kwargs: Any):
         if isinstance(value, int):
             value = bytes([value])
         if cls.size != -1 and len(value) != cls.size:
@@ -940,25 +968,27 @@ class BYTES(ElementaryDataType[bytes], bytes, metaclass=_ElementaryDataTypeMeta)
 
         return super().__new__(cls, value, *args, **kwargs)
 
-    def __class_getitem__(cls, item: int | EllipsisType | type[ElementaryDataType[int]]) -> type["BYTES"]:
+    def __class_getitem__(cls, item: "int | EllipsisType | type[IntDataType]") -> type["BYTES"]:
         size = item if isinstance(item, int) else -1
         _int_type = item if not isinstance(item, (int, EllipsisType)) else None
         if (_key := (size, _int_type)) not in __BYTES_TYPE_CACHE__:
             klass = type("BYTES", (cls,), {"size": size, "_int_type": _int_type})
             __BYTES_TYPE_CACHE__[_key] = klass
-        return cast(type[BYTES], __BYTES_TYPE_CACHE__[_key])
+        return __BYTES_TYPE_CACHE__[_key]
 
+    @override
     @classmethod
-    def _encode(cls, value: bytes, *args, **kwargs) -> bytes:
+    def _encode(cls, value: bytes, *args: Any, **kwargs: Any) -> bytes:
         val = value[: cls.size] if cls.size != -1 else value
         if cls._int_type is not None:
             val = bytes(cls._int_type(len(value))) + value
         return val
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
         if cls._int_type is not None:
-            size = cast(int, cls._int_type.decode(stream))
+            size = cls._int_type.decode(stream)
         else:
             size = cls.size
         if size:
@@ -970,12 +1000,14 @@ class BYTES(ElementaryDataType[bytes], bytes, metaclass=_ElementaryDataTypeMeta)
             data = b""
         return cls(data)
 
-    def __getitem__(self, item) -> bytes:  # type: ignore
+    @override
+    def __getitem__(self, item: "int | IntDataType | slice") -> bytes:  # pyright: ignore[reportIncompatibleMethodOverride]
         if isinstance(item, int):
             return super().__getitem__(slice(item, item + 1))
 
         return super().__getitem__(item)
 
+    @override
     def __repr__(self) -> str:
         if self._int_type is not None:
             size = self._int_type.__name__
