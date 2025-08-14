@@ -150,15 +150,16 @@ class STRINGI(StringDataType):
         utf_16_le = 1000
         utf_32_le = 1001
 
+    _strs: tuple[StrI, ...]
     __encoded_value__: bytes
 
     def __new__(cls, *args: StrI, **kwargs: Any):
         main_str, *_ = args
-        return super().__new__(cls, main_str.value)
-
-    def __init__(self, *strings: StrI, **kwargs: Any):
-        self._strs: tuple[StrI, ...] = strings
-        self.__encoded_value__ = self.encode(self)
+        # skip ElementaryDataType __new__ b/c we can't call cls.encode until after _strs set
+        obj = super(ElementaryDataType, cls).__new__(cls, main_str, **kwargs)
+        obj._strs = args
+        obj.__encoded_value__ = cls.encode(obj)
+        return obj
 
     def get(self, lang: STRINGI.Language | None = None) -> str:
         if lang is None:
@@ -274,7 +275,7 @@ class CSTRING(StringDataType):
     @override
     @classmethod
     def _encode(cls, value: str, *args: Any, **kwargs: Any) -> bytes:
-        return value.encode(cls.encoding) + b"\x00"
+        return str.encode(value, cls.encoding) + b"\x00"
 
     @override
     @classmethod

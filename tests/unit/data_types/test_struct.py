@@ -13,10 +13,11 @@ from cippy.data_types import (
     USINT,
     Annotated,
     Array,
-    ArrayType,
     DataError,
     Struct,
     attr,
+    array,
+    LenRef,
 )
 
 
@@ -78,9 +79,9 @@ def test_struct_array_member():
         y: STRING
 
     class S2(Struct):
-        a: UINT[USINT]
-        b: Annotated[ArrayType[S1, int], 3]
-        c: Annotated[SINT[3], "not used"]
+        a: Array[UINT, USINT]
+        b: Annotated[Array[S1, int], 3]
+        c: Annotated[array(SINT, 3), "not used"]  # type: ignore - not _correct_, but making sure it works still
 
     s2 = S2([1, 2, 3], [S1(10, "a"), S1(20, "b"), S1(30, "c")], [1, 2, 3])
 
@@ -100,7 +101,7 @@ def test_struct_array_member():
     class S3(Struct):
         a: UINT | int
         b: Array[UINT, USINT] | Sequence[UINT | int]
-        c: Annotated[ArrayType[UINT, int], 3] | Sequence[UINT | int]
+        c: Annotated[Array[UINT, int], 3] | Sequence[UINT | int]
 
     s3 = S3(1, [2, 2, 2], [4, 4, 4])
     assert s3.a == 1
@@ -115,7 +116,7 @@ def test_struct_array_member():
 def test_struct_missing_args():
     class S1(Struct):
         x: DINT
-        y: STRING[4]
+        y: Array[STRING, 4]  # type: ignore - not _correct_, but making sure it works still
         z: SINT
 
     with pytest.raises(TypeError):
@@ -149,32 +150,32 @@ def test_struct_reserved_field():
 def test_struct_array_len_ref():
     class S1(Struct):
         x: USINT
-        count: UINT = attr(init=False)
-        items: USINT[...] = attr(len_ref="count")
+        word_count: UINT = attr(init=False)
+        items: Array[USINT, ...] = attr(len_ref="word_count")
         z: UDINT = 3
 
     s = S1(1, [])
-    assert s.count == 0
-    assert asdict(s) == {"x": USINT(1), "count": UINT(0), "items": USINT[...]([]), "z": UDINT(3)}
+    assert s.word_count == 0
+    assert asdict(s) == {"x": USINT(1), "word_count": UINT(0), "items": array(USINT, ...)([]), "z": UDINT(3)}
     assert bytes(s) == b"\x01\x00\x00\x03\x00\x00\x00"
 
     s.items = [1, 2, 3]
-    assert s.count == 3
+    assert s.word_count == 3
     assert bytes(s) == b"\x01\x03\x00\x01\x02\x03\x03\x00\x00\x00"
 
     class S2(Struct):
         x: USINT
-        count: UINT = attr(init=False)
-        items: USINT[...] = attr(len_ref=("count", lambda x: x * 2, lambda x: x // 2))
+        word_count: UINT = attr(init=False)
+        items: Array[USINT, ...] = attr(len_ref=LenRef("word_count", lambda x: len(x) // 2, lambda x: x * 2))
         z: UDINT = 3
 
     s2 = S2(1, [])
-    assert s2.count == 0
-    assert asdict(s2) == {"x": USINT(1), "count": UINT(0), "items": USINT[...]([]), "z": UDINT(3)}
+    assert s2.word_count == 0
+    assert asdict(s2) == {"x": USINT(1), "word_count": UINT(0), "items": array(USINT, ...)([]), "z": UDINT(3)}
     assert bytes(s2) == b"\x01\x00\x00\x03\x00\x00\x00"
 
     s2.items = [1, 2, 3, 4]
-    assert s2.count == 2
+    assert s2.word_count == 2
     assert bytes(s2) == b"\x01\x02\x00\x01\x02\x03\x04\x03\x00\x00\x00"
     assert S2.decode(b"\x01\x02\x00\x01\x02\x03\x04\x03\x00\x00\x00") == s2
 

@@ -163,7 +163,7 @@ class _ElementaryDataTypeMeta(_DataTypeMeta):
         if cls_args := get_args(klass.__orig_bases__[0]):  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
             klass._base_type = cls_args[0]  # pyright: ignore[reportGeneralTypeIssues]
 
-        if not klass.size and klass._format:
+        if klass._format and not klass.size:
             klass.size = calcsize(klass._format)
 
         if klass.code:
@@ -225,15 +225,19 @@ class ElementaryDataType[T: ElementaryPyType](DataType, metaclass=_ElementaryDat
         return self._base_type.__repr__(self)  # type: ignore
 
 
-def _len_ref_callable(value: "Array[DataType, ArrayLenT]") -> int:
+def _default_len_ref_encode(value: "Array[DataType, ArrayLenT]") -> int:
     return len(value)
+
+
+def _default_len_ref_decode(value: int) -> int:
+    return value
 
 
 @dataclass
 class LenRef:
     name: str
     encode_func: "Callable[[Array[DataType, ArrayLenT]], int]"
-    decode_func: "Callable[[Array[DataType, ArrayLenT]], int]"
+    decode_func: "Callable[[int], int]"
 
 
 @dataclass
@@ -321,7 +325,7 @@ def _process_fields(cls: "type[Struct]") -> None:
                 raise DataError(f"Fields with 'len_ref' must be Arrays: {_field.name}")
             if len_ref.name not in cls.__struct_members__:
                 raise DataError(f"Invalid 'len_ref', {len_ref.name} is not a previous member of the struct")
-            cls.__struct_array_length_sources__[len_ref.name] = len_ref
+            cls.__struct_array_length_sources__[_field.name] = len_ref
         if size_ref := metadata.get("size_ref"):
             if cls.__struct_size_ref__ is not None:
                 raise DataError(f"'size_ref' already defined for struct field: {cls.__struct_size_ref__.name}")
@@ -394,7 +398,7 @@ def attr[T: DataType](
              struct whole. The attribute should be type hinted as `Array[...]` as well. This parameter must be
              the name of the length attribute or a tuple of the name, a decode function, and an encoded function.
              These functions are 1-arg callables that, for the decode function, receive the value of the length attribute
-             and return an int of the array length to decode; and for the encode function, receive the length of the array
+             and return an int of the array length to decode; and for the encode function, receives array
              and return an int of what the length field should be encoded as.
              The length attribute must be defined before the array as well, since it needs to be decoded before the array can be.
     size_ref: Indicates the field contains the size (byte count) for all the fields following it. Only one field can
@@ -415,7 +419,7 @@ def attr[T: DataType](
     if default is not None:
         field_kwargs["default"] = default
     if len_ref is not None and isinstance(len_ref, str):
-        len_ref = LenRef(len_ref, _len_ref_callable, _len_ref_callable)
+        len_ref = LenRef(len_ref, _default_len_ref_encode, _default_len_ref_decode)
     field_kwargs["metadata"]["len_ref"] = len_ref
     if size_ref and isinstance(size_ref, bool):
         size_ref = SizeRef(_default_ref_callable, _default_ref_callable)
@@ -486,31 +490,40 @@ class Struct(DataType, metaclass=_StructMeta):
     __field_descriptions__: ClassVar[dict[str, dict[DataType | int | None, str] | type[PredefinedValues]]] = {}
 
     def __post_init__(self, *args: Any, **kwargs: Any) -> None:
+        _len_ref_fields = {v.name: k for k, v in self.__struct_array_length_sources__.items()}
         for member, typ in self.__struct_members__.items():
             if issubclass(typ, (Struct, Array)):
                 getattr(self, member).__parent_struct__ = (self, member)
             if self.__struct_size_ref__ and member == self.__struct_size_ref__.name:
                 continue
-            value = getattr(self, member)
-            if not isinstance(value, typ) and (
-                (member in self.__struct_conditional_attributes__ and value is not None)
-                or member not in self.__struct_conditional_attributes__
-            ):
+            value = getattr(self, member, None)
+            if value is None:
+                if member in self.__struct_conditional_attributes__:
+                    continue
+                if member in _len_ref_fields:
+                    _array_name = _len_ref_fields[member]
+                    _len_ref = self.__struct_array_length_sources__[_array_name]
+                    _array_val = getattr(self, _array_name)
+                    value = _len_ref.encode_func(_array_val)
+                else:
+                    raise DataError(f"{member!r} is not conditional or a array length reference but is None")
+            if not isinstance(value, typ):
                 try:
                     if issubclass(typ, Struct):
                         value = typ(**cast(Mapping[str, Any], value))
                     else:
-                        value = typ(value)  # pyright: ignore[reportUnknownVariableType]
+                        value = typ(value)  # pyright: ignore[reportArgumentType, reportUnknownVariableType]
                 except Exception as err:
                     raise DataError(f"Type conversion error for attribute {member!r}") from err
                 else:
                     setattr(self, member, value)
+            value = cast(DataType, value)
             if member not in self.__encoded_fields__:
                 try:
                     if conditional_on := self.__struct_conditional_attributes__.get(member):
-                        val = bytes(value) if conditional_on.encode_func(getattr(self, conditional_on.name)) else b""  # pyright: ignore[reportUnknownArgumentType]
+                        val = bytes(value) if conditional_on.encode_func(getattr(self, conditional_on.name)) else b""
                     else:
-                        val = bytes(value)  # pyright: ignore[reportUnknownArgumentType]
+                        val = bytes(value)
 
                     self.__encoded_fields__[member] = bytes(val)
                 except Exception as err:
@@ -628,7 +641,7 @@ class Struct(DataType, metaclass=_StructMeta):
             try:
                 if len_ref := cls.__struct_array_length_sources__.get(name):
                     typ = cast(type[Array[DataType, int]], typ)
-                    val = cast(Array[DataType, ArrayLenT], values[len_ref.name])
+                    val = cast("IntDataType", values[len_ref.name])
                     length = len_ref.decode_func(val)
                     if typ is BYTES:
                         _array = BYTES[length]

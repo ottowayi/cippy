@@ -72,8 +72,8 @@ class StringDataType(ElementaryDataType[str], str, metaclass=_StringTypeMeta):
 
     @override
     @classmethod
-    def _encode(cls, value: str, *args: Any, **kwargs: Any) -> bytes:
-        return cls.len_type.encode(len(value)) + value.encode(cls.encoding)
+    def _encode(cls, value: str | Self, *args: Any, **kwargs: Any) -> bytes:
+        return cls.len_type.encode(len(value)) + str.encode(value, cls.encoding)
 
     @override
     @classmethod
@@ -91,7 +91,7 @@ class StringDataType(ElementaryDataType[str], str, metaclass=_StringTypeMeta):
 
 
 class BitArrayType(IntDataType):
-    bits: tuple[int, ...]
+    bits: tuple[int, ...]  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __new__(cls, value: int | Sequence[int], *args: Any, **kwargs: Any):
         try:
@@ -99,11 +99,10 @@ class BitArrayType(IntDataType):
                 value = cls._from_bits(value)
         except Exception:
             raise DataError(f"invalid value for {cls}: {value!r}")
-        obj = super().__new__(cls, value)
+        obj = super(ElementaryDataType, cls).__new__(cls, value)
+        obj.bits = cls._to_bits(obj)
+        obj.__encoded_value__ = cls.encode(obj)
         return obj
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.bits = self._to_bits(self)
 
     @override
     @classmethod

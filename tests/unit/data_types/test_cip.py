@@ -1,3 +1,4 @@
+# pyright: reportMissingParameterType=false, reportUnknownParameterType=false
 from cippy.data_types import (
     PortSegment,
     PortIdentifier,

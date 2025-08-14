@@ -160,5 +160,5 @@ def test_cstring():
     assert bytes(CSTRING("abc")) == b"abc\x00"
     assert CSTRING.decode(b"abc\x00") == "abc"
 
-    assert array(CSTRING, ...).decode(b"a\x00b\x00c\x00") == CSTRING[3](["a", "b", "c"])
-    assert bytes(CSTRING[3](["a", "b", "c"])) == b"a\x00b\x00c\x00"
+    assert array(CSTRING, ...).decode(b"a\x00b\x00c\x00") == array(CSTRING, 3)(["a", "b", "c"])
+    assert bytes(array(CSTRING, 3)(["a", "b", "c"])) == b"a\x00b\x00c\x00"
