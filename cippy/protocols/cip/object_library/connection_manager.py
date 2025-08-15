@@ -1,7 +1,9 @@
 from dataclasses import InitVar, dataclass
 from enum import IntEnum
 from io import BytesIO
-from typing import ClassVar, Self, Sequence
+from typing import ClassVar, Self, Any, final
+from typing_extensions import override
+from collections.abc import Sequence
 
 from cippy._logging import get_logger
 from cippy.data_types import (
@@ -22,7 +24,7 @@ from cippy.data_types import (
 )
 from cippy.util import StatusEnum
 
-from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, service
+from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, StatusCodesType, service
 from ..cip_route import CIPRoute
 from ..msg_router_services import MessageRouterRequest, MsgRouterResponseParser, message_router_service
 from .._base import CIPRequest, CIPResponse
@@ -189,13 +191,19 @@ class UnconnectedSendRequest(Struct):
     PRIORITY: ClassVar[USINT] = USINT(0b_000_1_0000)
 
     def __post_init__(
-        self, tick_time: TickTime = TickTime.ms_1024, num_ticks: int = 1, priority: bool = False, *args, **kwargs
+        self,
+        tick_time: TickTime = TickTime.ms_1024,
+        num_ticks: int = 1,
+        priority: bool = False,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         _priority = self.PRIORITY if priority else USINT(0)
         self.priority_tick_time = USINT(_priority | tick_time)
         self.timeout_ticks = USINT(num_ticks)
         self.message_request_size = UINT(len(bytes(self.message_request)))
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
         ptt = USINT.decode(stream)
@@ -206,7 +214,7 @@ class UnconnectedSendRequest(Struct):
         request_data = cls._stream_read(stream, request_size)
         request = MessageRouterRequest.decode(request_data)
         if request_size % 2:
-            pad = cls._stream_read(stream, 1)
+            _ = cls._stream_read(stream, 1)
         route_path = PADDED_EPATH_PAD_LEN.decode(stream)
 
         return cls(
@@ -217,8 +225,9 @@ class UnconnectedSendRequest(Struct):
             priority=priority,
         )
 
+    @override
     @classmethod
-    def _encode(cls, value: Self, *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         return b"".join(
             bytes(x)
             for x in (
@@ -256,6 +265,7 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
     response_type: type[T]
     failed_response_type: type[UnconnectedSendFailedResponse] = UnconnectedSendFailedResponse
 
+    @override
     def parse(
         self, data: BYTES, request: CIPRequest[T | UnconnectedSendFailedResponse]
     ) -> CIPResponse[T | UnconnectedSendFailedResponse]:
@@ -270,7 +280,7 @@ class UnconnectedSendResponseParser[T: DataType](MsgRouterResponseParser[T, Unco
         else:
             addl_status = Array[UINT, USINT].decode(buff)
             match header.general_status, addl_status:
-                case (
+                case (  # pyright: ignore[reportUnnecessaryComparison]
                     GeneralStatusCodes.connection_failure,
                     [
                         ConnMgrExtStatusCodesConnFailure.unconnected_send_timeout
@@ -388,34 +398,34 @@ class ConnectionManager(CIPObject):
     Manages internal resources for both I/O and Explicit Messaging connections.
     """
 
-    class_code = 0x06
+    class_code: int = 0x06
 
     #: Number of received Forward Open requests
-    open_requests = CIPAttribute(id=1, data_type=UINT, get_all_instance=True)
+    open_requests: CIPAttribute[UINT, Self] = CIPAttribute(id=1, data_type=UINT, get_all_instance=True)
     #: Number of Forward Open requests rejected because of bad formatting
-    open_format_rejects = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
+    open_format_rejects: CIPAttribute[UINT, Self] = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Number of Forward Open requests rejected for lack of resources
-    open_resource_rejects = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
+    open_resource_rejects: CIPAttribute[UINT, Self] = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: Number of Forward Open requests reject for reasons other than bad formatting or lack of resources
-    open_other_rejects = CIPAttribute(id=4, data_type=UINT, get_all_instance=True)
+    open_other_rejects: CIPAttribute[UINT, Self] = CIPAttribute(id=4, data_type=UINT, get_all_instance=True)
     #: Number of received Forward Close requests
-    close_requests = CIPAttribute(id=5, data_type=UINT, get_all_instance=True)
+    close_requests: CIPAttribute[UINT, Self] = CIPAttribute(id=5, data_type=UINT, get_all_instance=True)
     #: Number of Forward Close requests rejected because of bad formatting
-    close_format_rejects = CIPAttribute(id=6, data_type=UINT, get_all_instance=True)
+    close_format_rejects: CIPAttribute[UINT, Self] = CIPAttribute(id=6, data_type=UINT, get_all_instance=True)
     #: Number of Forward Close requests reject for reasons other than bad formatting
-    close_other_rejects = CIPAttribute(id=7, data_type=UINT, get_all_instance=True)
+    close_other_rejects: CIPAttribute[UINT, Self] = CIPAttribute(id=7, data_type=UINT, get_all_instance=True)
     #: Number of connection timeouts in connections managed by this instance
-    connection_timeouts = CIPAttribute(id=8, data_type=UINT, get_all_instance=True)
+    connection_timeouts: CIPAttribute[UINT, Self] = CIPAttribute(id=8, data_type=UINT, get_all_instance=True)
     #: List of connections, each positive bit corresponds to a connection instance
     # TODO connection_entry_list = CIPAttribute(id=9, data_type=...)
     #      and also get_all_instance=True for following attrs
     # attribute 10 is reserved or obsolete
     #: CPU utilization as tenths of a percent, 0-100% scaled to 0-1000
-    cpu_utilization = CIPAttribute(id=11, data_type=UINT)
+    cpu_utilization: CIPAttribute[UINT, Self] = CIPAttribute(id=11, data_type=UINT)
     #: Total size (in bytes) of the buffer
-    max_buffer_size = CIPAttribute(id=12, data_type=UDINT)
+    max_buffer_size: CIPAttribute[UDINT, Self] = CIPAttribute(id=12, data_type=UDINT)
     #: Currently available size (in bytes) of the buffer
-    buffer_size_remaining = CIPAttribute(id=13, data_type=UDINT)
+    buffer_size_remaining: CIPAttribute[UDINT, Self] = CIPAttribute(id=13, data_type=UDINT)
 
     @classmethod
     def __customize_object__(cls) -> None:
@@ -424,7 +434,6 @@ class ConnectionManager(CIPObject):
         cls.max_instance_attr.get_all_class = True
 
     @service(id=USINT(0x4E))
-    @classmethod
     def forward_close(
         cls, params: ForwardCloseRequest
     ) -> CIPRequest[ForwardCloseResponse | ForwardCloseFailedResponse]:
@@ -432,7 +441,7 @@ class ConnectionManager(CIPObject):
         Closes a connection
         """
         return message_router_service(
-            service=cls.forward_close.__cip_service_id__,  # type: ignore
+            service=cls.forward_close.id,
             class_code=cls.class_code,
             instance=ConnectionManager.Instance.open_request,
             request_data=params,
@@ -440,15 +449,14 @@ class ConnectionManager(CIPObject):
             failed_response_type=ForwardCloseFailedResponse,
         )
 
-    @service(id=USINT(0x54))
-    @classmethod
+    @service(id=0x54)
     def forward_open(cls, params: ForwardOpenRequest) -> CIPRequest[ForwardOpenResponse | ForwardOpenFailedResponse]:
         """
         Opens a connection with a maximum data size of 511 bytes
         """
 
         return message_router_service(
-            service=cls.forward_open.__cip_service_id__,  # type: ignore
+            service=cls.forward_open.id,
             class_code=cls.class_code,
             instance=ConnectionManager.Instance.open_request,
             request_data=params,
@@ -457,7 +465,6 @@ class ConnectionManager(CIPObject):
         )
 
     @service(id=USINT(0x5B))
-    @classmethod
     def large_forward_open(
         cls, params: LargeForwardOpenRequest
     ) -> CIPRequest[ForwardOpenResponse | ForwardOpenFailedResponse]:
@@ -465,7 +472,7 @@ class ConnectionManager(CIPObject):
         Opens a connection with a maximum data size of 65535 bytes
         """
         return message_router_service(
-            service=cls.large_forward_open.__cip_service_id__,  # type: ignore
+            service=cls.large_forward_open.id,
             class_code=cls.class_code,
             instance=cls.Instance.open_request,
             request_data=params,
@@ -474,7 +481,6 @@ class ConnectionManager(CIPObject):
         )
 
     @service(id=USINT(0x52))
-    @classmethod
     def unconnected_send[T: DataType](
         cls,
         msg: CIPRequest[T],
@@ -484,7 +490,7 @@ class ConnectionManager(CIPObject):
     ) -> CIPRequest[T | UnconnectedSendFailedResponse]:
         return CIPRequest(
             message=MessageRouterRequest.build(
-                service=cls.unconnected_send.__cip_service_id__,  # type: ignore
+                service=cls.unconnected_send.id,
                 class_code=cls.class_code,
                 instance=1,
                 data=UnconnectedSendRequest(
@@ -500,6 +506,7 @@ class ConnectionManager(CIPObject):
             ),
         )
 
+    @final
     class Instance(CIPObject.Instance):
         open_request = 0x01
         open_format_rejected = 0x02
@@ -510,7 +517,7 @@ class ConnectionManager(CIPObject):
         close_other_request = 0x07
         connection_timeout = 0x08
 
-    STATUS_CODES = {
+    STATUS_CODES: ClassVar[StatusCodesType] = {
         "*": {
             GeneralStatusCodes.connection_failure: ConnMgrExtStatusCodesConnFailure,
             GeneralStatusCodes.invalid_attribute: {
@@ -519,17 +526,18 @@ class ConnectionManager(CIPObject):
         },
     }
 
+    @override
     @classmethod
     def _customize_extended_status(
         cls, general_status: int, ext_status: int, ext_status_extra: Sequence[int], extra_data: DataType | None
     ) -> str | None:
-        if ext_status == ConnMgrExtStatusCodesConnFailure.invalid_connection_size:
+        if ext_status == ConnMgrExtStatusCodesConnFailure.invalid_connection_size:  # pyright: ignore[reportUnnecessaryComparison]
             if ext_status_extra:
                 max_supported_size = ext_status_extra[0]
                 return f"{max_supported_size=:d}"
-        if general_status == GeneralStatusCodes.invalid_attribute:
+        if general_status == GeneralStatusCodes.invalid_attribute:  # pyright: ignore[reportUnnecessaryComparison]
             return f"DataSegment error at index {ext_status}"
-        if general_status == GeneralStatusCodes.object_state_conflict:
+        if general_status == GeneralStatusCodes.object_state_conflict:  # pyright: ignore[reportUnnecessaryComparison]
             return f"state={ext_status:#06x}"
 
         return None

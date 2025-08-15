@@ -1,5 +1,3 @@
-# pyright: reportMissingParameterType = false
-
 import pytest
 
 from cippy.data_types import DINT, INT, SINT, STRING, Array, Struct, array
@@ -22,6 +20,7 @@ def test_array_classes():
         x = array(DINT, ...).size
 
     with pytest.raises(DataError):
+        x = array(DINT, INT).size
         x = array(DINT, INT).size
 
     assert array(DINT, 1) == array(DINT, 1)

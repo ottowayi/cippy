@@ -280,9 +280,12 @@ def _process_typehint(typ: Any, _field: Field[type[DataType]]) -> type[DataType]
                 raise DataError(f"Annotated types must provide a DataType for the first arg: {_field.name}")
             field_type = _type
 
-    elif isclass(origin) and issubclass(origin, Array):
-        # handles 'x: ArrayType[y, z]' case
-        field_type = array(*get_args(typ))
+    elif isclass(origin):
+        if issubclass(origin, Array):
+            # handles 'x: ArrayType[y, z]' case
+            field_type = array(*get_args(typ))
+        else:
+            field_type = origin
 
     return cast(type[DataType], field_type)
 
@@ -348,30 +351,30 @@ def _default_conditional_callable(value: DataType | int) -> bool:
     return value == 0
 
 
-@overload  # if a default is provided
-def attr[T: DataType](
-    *,
-    default: T,
-    init: Literal[True] = True,
-    reserved: Literal[False] = False,
-    len_ref: LenRef | str | None = None,
-    size_ref: SizeRef | bool | str = False,
-    conditional_on: ConditionalOn | str | None = None,
-    fmt: str | None = None,
-    **kwargs: Any,
-) -> T: ...
-@overload
-def attr[T: DataType](
-    *,
-    default: DataType | None = None,
-    reserved: Literal[True] = True,
-    init: Literal[False] = False,
-    len_ref: LenRef | str | None = None,
-    size_ref: SizeRef | bool | str = False,
-    conditional_on: ConditionalOn | str | None = None,
-    fmt: str | None = None,
-    **kwargs: Any,
-) -> Any: ...
+# @overload  # if a default is provided
+# def attr[T: DataType](
+#     *,
+#     default: T,
+#     init: Literal[True] = True,
+#     reserved: Literal[False] = False,
+#     len_ref: LenRef | str | None = None,
+#     size_ref: SizeRef | bool | str = False,
+#     conditional_on: ConditionalOn | str | None = None,
+#     fmt: str | None = None,
+#     **kwargs: Any,
+# ) -> T: ...
+# @overload
+# def attr[T: DataType](
+#     *,
+#     default: DataType | None = None,
+#     reserved: Literal[True] = True,
+#     init: Literal[False] = False,
+#     len_ref: LenRef | str | None = None,
+#     size_ref: SizeRef | bool | str = False,
+#     conditional_on: ConditionalOn | str | None = None,
+#     fmt: str | None = None,
+#     **kwargs: Any,
+# ) -> Any: ...
 def attr[T: DataType](
     *,
     default: T | None = None,
@@ -438,7 +441,7 @@ def attr[T: DataType](
 type StructValuesType = dict[str, DataType] | Sequence[DataType]
 
 # Types that the Array length may be
-type ArrayLenT = None | type[ElementaryDataType[int]] | int | EllipsisType
+type ArrayLenT = "None | type[IntDataType] | int | EllipsisType"
 
 
 @dataclass_transform(field_specifiers=(attr,))
@@ -668,13 +671,13 @@ class Struct(DataType, metaclass=_StructMeta):
         return instance
 
     @classmethod
-    def create[T: DataType](
+    def create(
         cls,
         name: str,
-        members: Sequence[tuple[str, type[T]]] | Sequence[tuple[str, type[T], Field[T]]],
+        members: Sequence[tuple[str, type[DataType]]] | Sequence[tuple[str, type[DataType], Field[DataType]]],
     ) -> type["Struct"]:
-        _fields: list[tuple[str, type[T], Field[T] | None]] = []
-        member: tuple[str, type[T]] | tuple[str, type[T], Field[T]]
+        _fields: list[tuple[str, type[DataType], Field[DataType] | None]] = []
+        member: tuple[str, type[DataType]] | tuple[str, type[DataType], Field[DataType]]
         for i, member in enumerate(members):
             if len(member) == 2:
                 _name, typ = member
@@ -747,7 +750,7 @@ class _ArrayMeta(_DataTypeMeta):
     def size(cls) -> int:
         if (
             cls.length in {None, Ellipsis}  # fmt: skip
-            or (isclass(cls.length) and issubclass(cls.length, DataType))  # pyright: ignore[reportUnnecessaryIsInstance]
+            or (isclass(cls.length) and issubclass(cls.length, DataType))
         ):
             raise DataError("cannot determine dynamic array sizes before instantiation")
         else:
@@ -783,8 +786,6 @@ def array[TElem: DataType, TLen: ArrayLenT](element_type: type[TElem], length: T
 
     return cast(type[Array[TElem, TLen]], __ARRAY_TYPE_CACHE__[_key])
 
-    # return Array
-
 
 class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
     """
@@ -794,7 +795,7 @@ class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
     element_type: type[TElem]
     length: TLen
 
-    def __init__(self: Self, value: Sequence[Any]) -> None:
+    def __init__(self: Self, value: Sequence[TElem]) -> None:
         self.__parent_struct__: tuple[Struct, str] | None = None
         if isinstance(self.length, int):
             try:
@@ -814,7 +815,7 @@ class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
 
     @property
     def size(self) -> int:  # pyright: ignore[reportIncompatibleVariableOverride, reportImplicitOverride]
-        if isclass(self.length) and issubclass(self.length, DataType):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if isclass(self.length) and issubclass(self.length, DataType):
             return self.length.size + len(self._array) * self.element_type.size
         else:
             return len(self._array) * self.element_type.size
@@ -887,7 +888,7 @@ class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
     @classmethod
     def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         encoded_elements = b"".join(value._encoded_array)
-        if isclass(value.length) and issubclass(value.length, DataType):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if isclass(value.length) and issubclass(value.length, DataType):
             return bytes(value.length(len(value))) + encoded_elements
 
         return encoded_elements
@@ -912,7 +913,7 @@ class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
             if cls.length in {None, Ellipsis}:
                 return cls(cls._decode_all(stream, *args, **kwargs))
 
-            if isclass(cls.length) and issubclass(cls.length, ElementaryDataType):  # pyright: ignore[reportUnnecessaryIsInstance]
+            if isclass(cls.length) and issubclass(cls.length, ElementaryDataType):
                 _len = cls.length.decode(stream)
             else:
                 _len = cls.length
@@ -942,7 +943,7 @@ class Array[TElem: DataType, TLen: ArrayLenT](DataType, metaclass=_ArrayMeta):
         element_type, len_type = item
         if (
             isclass(element_type)
-            and issubclass(element_type, DataType)  # pyright: ignore[reportUnnecessaryIsInstance]
+            and issubclass(element_type, DataType)
             and (
                 len_type in (None, ...)
                 or isinstance(len_type, int)

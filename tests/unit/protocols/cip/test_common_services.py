@@ -15,7 +15,7 @@ get_attr_single_tests = [
 def test_get_attr_single_requests(attribute, instance, encoded, response, encoded_response):
     request: CIPRequest = attribute.object.get_attribute_single(attribute=attribute, instance=instance)  # type: ignore
     assert bytes(request.message) == bytes.fromhex(encoded)
-    assert request.message.service == attribute.object.get_attribute_single.__cip_service_id__
+    assert request.message.service == attribute.object.get_attribute_single.id
     assert not request.message.data
     assert request.message.path == PADDED_EPATH_LEN(
         [
@@ -29,11 +29,7 @@ def test_get_attr_single_requests(attribute, instance, encoded, response, encode
     _enc_resp = BYTES(bytes.fromhex(encoded_response))
     resp = request.response_parser.parse(_enc_resp, request)
     assert resp.data == response
-    assert (
-        resp.message.request_service
-        == request.message.service
-        == attribute.object.get_attribute_single.__cip_service_id__
-    )
+    assert resp.message.request_service == request.message.service == attribute.object.get_attribute_single.id
 
 
 status_msg_tests = [

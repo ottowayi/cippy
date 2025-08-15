@@ -1,5 +1,6 @@
 from dataclasses import InitVar
-from typing import ClassVar, Final, Sequence, cast
+from typing import Annotated, ClassVar, Final, cast, final, override, overload, Any
+from collections.abc import Sequence
 
 from cippy.data_types import (
     BYTES,
@@ -16,14 +17,18 @@ from cippy.data_types import (
     Struct,
     as_stream,
     attr,
+    DataType,
     buff_repr,
 )
+from cippy.data_types._base import BufferT
 from cippy.exceptions import BufferEmptyError, DataError
+from cippy.util import PredefinedValues
 
 DEFAULT_CONTEXT: Final[BYTES[8]] = BYTES[8](b"\x00" * 8)
 
 
-class EncapsulationCommand:
+@final
+class EncapsulationCommand(PredefinedValues):
     nop = UINT(0)
     list_services = UINT(0x04)
     list_identity = UINT(0x63)
@@ -39,7 +44,8 @@ ENCAP_COMMAND_NAMES: Final[dict[UINT, str]] = {
 }
 
 
-class EtherNetIPStatus:
+@final
+class EtherNetIPStatus(PredefinedValues):
     Success = UDINT(0x0000)
     InvalidOrUnsupportedEncapCommand = UDINT(0x0001)
     InsufficientReceiverMemory = UDINT(0x0002)
@@ -68,6 +74,7 @@ class EtherNetIPHeader(Struct):
     context: BYTES[8] = DEFAULT_CONTEXT
     options: UDINT = UDINT(0)
 
+    @override
     def __str__(self) -> str:
         command = f"{self.command:#04x}: '{ENCAP_COMMAND_NAMES.get(self.command, 'UNKNOWN')}'"
         status = f"{self.status:#06x}: '{ETHERNETIP_STATUS_CODES.get(self.status, 'UNKNOWN')}'"
@@ -75,7 +82,7 @@ class EtherNetIPHeader(Struct):
         return f"{self.__class__.__name__}({command=!s}, {status=!s}, {session=})"
 
 
-class CPFItemType:
+class CPFItemType(PredefinedValues):
     """
     Common Packet Format Item Types
     """
@@ -96,7 +103,7 @@ class CPFItemType:
     cip_communications: UINT = UINT(0x100)
 
 
-CPF_ITEM_TYPE_NAMES: Final[dict[UINT, str]] = {
+CPF_ITEM_TYPE_NAMES: Final[dict[UINT | int | None, str] | type[PredefinedValues]] = {
     **{v: k.replace("_", " ").title() for k, v in vars(CPFItemType).items() if k.endswith(("_data", "_address"))},
     CPFItemType.sock_addr_info_o_t: "Socket Address Info O->T",
     CPFItemType.sock_addr_info_t_o: "Socket Address Info T->O",
@@ -109,10 +116,13 @@ class CPFItem(Struct):
     type_id: UINT
     length: UINT
 
-    __field_descriptions__: ClassVar[dict] = {"type_id": CPF_ITEM_TYPE_NAMES}
+    __field_descriptions__: ClassVar[dict[str, dict[DataType | int | None, str] | type[PredefinedValues]]] = {
+        "type_id": CPF_ITEM_TYPE_NAMES
+    }
 
+    @override
     @classmethod
-    def decode(cls, buffer) -> "CPFItem":
+    def decode(cls, buffer: BufferT) -> "CPFItem":
         try:
             stream = as_stream(buffer)
             type_id = UINT.decode(cls._stream_peek(stream, UINT.size))
@@ -162,7 +172,7 @@ class Sockaddr(Struct):
     sin_family: INT_BE
     sin_port: UINT_BE
     sin_addr: IPAddress_BE
-    sin_zero: USINT_BE[8]
+    sin_zero: Annotated[Array[USINT_BE, int], 8]
 
 
 class SockaddrInfo(CPFItem):
@@ -179,7 +189,7 @@ class CIPIdentity(CPFItem):
     vendor_id: UINT
     device_type: UINT
     product_code: UINT
-    revision: USINT[2]
+    revision: Annotated[Array[USINT, int], 2]
     status: WORD
     serial_number: UDINT
     product_name: SHORT_STRING
@@ -201,7 +211,7 @@ class ServiceInfo(CPFItem):
     length: UINT = attr(init=False, size_ref=True)
     protocol_version: UINT | int = 1
     compatibility_flags: UINT | int = 0b_0000_0000_0010_0000  # support cip = yes, cip class 0/1 udp = no
-    service_name: BYTES[16] | bytes = attr(default=b"Communications\x00\x00")
+    service_name: BYTES[16] | bytes = attr(default=BYTES(b"Communications\x00\x00"))
 
 
 class ListServicesData(Struct):
@@ -234,8 +244,8 @@ class CommonPacketFormat[AddrT: AddressItemsT, DataT: DataItemsT](Struct):
         address_item: AddrT | None = None,
         data_item: DataT | None = None,
         extra_items: Array[CPFItem, None] | None = None,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ):
         if None not in (address_item, data_item):
             self.items = [address_item, data_item, *(extra_items or [])]  # type:ignore
@@ -254,12 +264,12 @@ type SendUnitDataPacketFormat = CommonPacketFormat[SequencedAddress, ConnectedDa
 
 
 class SendRRDataData(Struct):
-    interface_handle: UDINT | int = attr(default=0, init=False)  # always 0 for CIP
-    timeout: UINT | int = attr(default=0, init=False)  # typically 0 for CIP, which has its own timeout
-    packet: CommonPacketFormat | SendRRDataPacketFormat
+    interface_handle: UDINT | int = attr(default=UINT(0), init=False)  # always 0 for CIP
+    timeout: UINT | int = attr(default=UINT(0), init=False)  # typically 0 for CIP, which has its own timeout
+    packet: SendRRDataPacketFormat
 
 
 class SendUnitDataData(Struct):
-    interface_handle: UDINT | int = attr(default=0, init=False)
-    timeout: UINT | int = attr(default=0, init=False)
-    packet: CommonPacketFormat | SendUnitDataPacketFormat
+    interface_handle: UDINT | int = attr(default=UINT(0), init=False)
+    timeout: UINT | int = attr(default=UINT(0), init=False)
+    packet: SendUnitDataPacketFormat

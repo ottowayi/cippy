@@ -3,8 +3,10 @@ Base objects for explicit messaging with the MessageRouter object.
 Includes request/response types and base service and parser classes
 """
 
+from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
+
 
 from cippy._logging import get_logger
 from cippy.data_types import (
@@ -20,12 +22,14 @@ from cippy.data_types import (
     Struct,
     attr,
 )
+from cippy.data_types.cip import CIPSegment
 from cippy.exceptions import DataError
 
 from ._base import SUCCESS, CIPRequest, CIPResponse, CIPResponseParser
 
 if TYPE_CHECKING:
     from .cip_object import CIPAttribute, CIPObject
+    from typing_extensions import TypeIs
 
 
 def cip_object_from_path(path: EPATH) -> "type[CIPObject]":
@@ -35,7 +39,10 @@ def cip_object_from_path(path: EPATH) -> "type[CIPObject]":
     """
     from .cip_object import CIPObject  # fuck it, I give up on circular imports
 
-    _log_segs = (x.value for x in path if x.segment_type == LogicalSegmentType.type_class_id)  # type: ignore
+    def is_logical(x: CIPSegment) -> "TypeIs[LogicalSegment]":
+        return x.segment_type == LogicalSegmentType.type_class_id
+
+    _log_segs = (x.value for x in path if is_logical(x) and isinstance(x.value, int))
     if not (cls_code := next(_log_segs, None)):
         return CIPObject
     return CIPObject.__cip_objects__.get(cls_code, CIPObject)
@@ -54,7 +61,7 @@ class MessageRouterRequest(Struct):
         attribute: int | None = None,
         data: DataType | bytes = b"",
     ) -> "MessageRouterRequest":
-        cip_segments = [
+        cip_segments: list[CIPSegment] = [
             LogicalSegment(LogicalSegmentType.type_class_id, class_code),
             LogicalSegment(LogicalSegmentType.type_instance_id, instance),
         ]
@@ -115,13 +122,13 @@ class MsgRouterResponseParser[TR: DataType, TF: DataType]:
         return self.failed_response_type.decode(data)
 
 
-def message_router_service[TReq: DataType, TResp: DataType, TFResp: DataType](
+def message_router_service[TResp: DataType, TFResp: DataType](
     *,
-    service: USINT,
+    service: USINT | int,
     class_code: int,
     instance: int | None = 1,
-    attribute: "CIPAttribute | None" = None,
-    request_data: TReq | bytes | None = None,
+    attribute: "CIPAttribute[TResp, CIPObject] | None" = None,
+    request_data: DataType | bytes | None = None,
     response_type: type[TResp],
     failed_response_type: type[TFResp] = BYTES,
     response_parser: CIPResponseParser[TResp | TFResp] | None = None,
@@ -130,6 +137,7 @@ def message_router_service[TReq: DataType, TResp: DataType, TFResp: DataType](
     """
     ...
     """
+    service = service if isinstance(service, USINT) else USINT(service)
     attr_id = None if attribute is None else attribute.id
     parser = response_parser or MsgRouterResponseParser(
         response_type=response_type,

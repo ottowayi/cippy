@@ -1,12 +1,25 @@
+from collections.abc import Sequence
 from dataclasses import Field, dataclass, field, replace
+from functools import update_wrapper
 from inspect import isclass
-from typing import Callable, ClassVar, Final, Literal, Protocol, Sequence, cast, Self, overload, Any
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Concatenate,
+    Final,
+    Literal,
+    Self,
+    cast,
+    overload,
+    override,
+)
 
-from cippy.data_types import BYTES, UINT, USINT, DataType, Struct, attr
+from cippy.data_types import BYTES, UINT, USINT, Array, DataType, Struct, array, attr
 from cippy.exceptions import DataError
 from cippy.util import PredefinedValues, StatusEnum
 
-from ._base import SUCCESS, CIPRequest, CIPResponseParser
+from ._base import CIPRequest, CIPResponseParser
 from .msg_router_services import MessageRouterRequest, MsgRouterResponseParser
 
 
@@ -38,6 +51,7 @@ class CIPAttribute[T: DataType, TObj: "CIPObject"]:
         if not self.class_attr and self.get_all_class:
             raise ValueError("cannot be instance attribute and get_all_class=True")
 
+    @override
     def __str__(self):
         return f"{self.object.__name__}.{self.name}"
 
@@ -58,7 +72,7 @@ class CIPAttribute[T: DataType, TObj: "CIPObject"]:
         self.name = name
         self.object = owner
 
-    def __set__(self, instance: TObj, value):
+    def __set__(self, instance: TObj, value: Any):
         if instance.instance and self.class_attr:
             raise DataError(
                 f"cannot set class attribute {self.name} on non-class instance of {instance.__class__.__name__}"
@@ -78,34 +92,85 @@ class CIPAttribute[T: DataType, TObj: "CIPObject"]:
         instance.__dict__[self.name] = value
 
 
-@dataclass
-class _CIPService:
-    id: USINT
-    name: str
-    func: Callable
+type ServiceMethod[T: "CIPObject", **P, R: DataType] = Callable[Concatenate[T, P], CIPRequest[R]]
+type _ServiceFunc[T: "CIPObject", **P, R: DataType] = Callable[Concatenate[type[T], P], CIPRequest[R]]
+
+
+class _ServiceCallable[T: "CIPObject", **P, R: DataType]:
+    id: int
+    obj: type[T]
+    method: _ServiceFunc[T, P, R]
+
+    def __init__(self, id: int, obj: type[T], method: ServiceMethod[T, P, R]) -> None:
+        self.id = id
+        self.obj = obj
+        self.method = cast(_ServiceFunc[T, P, R], method)
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> CIPRequest[R]:
+        return self.method(self.obj, *args, **kwargs)
+
+
+class CIPService[T: "CIPObject"]:
+    name: str  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    def __init__[**P, R: DataType](self, /, _id: int | USINT, method: ServiceMethod[T, P, R]):
+        self.id: USINT = _id if isinstance(_id, USINT) else USINT(_id)
+        self.method: ServiceMethod[T, ..., ...] = method
+
+    def __set_name__(self, owner: type[T], name: str) -> None:
+        self.name = name
+
+    def __get__[**P](self, instance: "T | None", owner: "type[T] | None" = None) -> _ServiceCallable[T, P, DataType]:
+        obj = cast(type[T], owner if instance is None else instance.__class__)
+
+        svc = _ServiceCallable(self.id, obj, self.method)
+        _ = update_wrapper(svc, self.method)
+        return svc
+
+
+def service[T: "CIPObject", **P, R: DataType](
+    id: USINT | int,
+) -> Callable[[ServiceMethod[T, P, R]], CIPService[T]]:
+    """
+    A decorator to create CIP services, aka CIPObject methods that return a CIPRequest.
+    Each service requires a service code (`id`). The decorator behaves similar to `@classmethod`,
+    so the first parameter should be `cls` and will be the CIPObject class. The service id is accessible via
+    `cls.<method name>.id`, this is required for the CIPRequest.
+
+    """
+
+    def _service(method: ServiceMethod[T, P, R] | Callable[Concatenate[type[T], P], CIPRequest[R]]) -> CIPService[T]:
+        if isinstance(method, classmethod):
+            _method = cast(ServiceMethod[T, P, R], method.__func__)
+        else:
+            _method = cast(ServiceMethod[T, P, R], method)
+        return CIPService(_id=id, method=_method)
+
+    return _service
+
+
+# pyright: reportUninitializedInstanceVariable = true
 
 
 class _MetaCIPObject(type):
     # keeps track of object classes by class code
     __cip_objects__: ClassVar[dict[int, "type[CIPObject]"]] = {}
-    __cip_services__: dict[USINT, _CIPService]
-    __cip_attributes__: dict[int, CIPAttribute]
-    __cip_instance_attributes__: dict[str, CIPAttribute]
-    __cip_class_attributes__: dict[str, CIPAttribute]
-    __instance_struct__: type[Struct]
-    __class_struct__: type[Struct]
+
     class_code: int = 0
 
-    def __new__(cls, name, bases, classdict):
-        klass = super().__new__(cls, name, bases, classdict)
+    def __new__[T: "CIPObject"](metacls, name: str, bases: tuple[type[T], ...], classdict: dict[str, Any]):
+        klass = super().__new__(metacls, name, bases, classdict)
+        klass = cast(type[T], klass)
+
         # start with new attrs added to this class
-        cip_attrs: dict[str, CIPAttribute] = {
+        cip_attrs: dict[str, CIPAttribute[DataType, T]] = {
             attr_name: attrib for attr_name, attrib in vars(klass).items() if isinstance(attrib, CIPAttribute)
         }
         # then add copies of all parent attrs, excluding overridden ones on this class
         for _class in bases:
             for attr_name, attrib in vars(_class).items():
                 if isinstance(attrib, CIPAttribute) and attr_name not in cip_attrs:
+                    attrib: CIPAttribute[DataType, T]
                     new_attr = replace(attrib)
                     cip_attrs[attr_name] = new_attr
                     new_attr.__set_name__(klass, attr_name)
@@ -142,10 +207,8 @@ class _MetaCIPObject(type):
             ],
         )
 
-        services = {
-            _id: _CIPService(_id, name, func.__func__)
-            for name, func in vars(klass).items()
-            if isinstance(func, classmethod) and (_id := getattr(func.__func__, "__cip_service_id__", None)) is not None
+        services: dict[USINT, CIPService[T]] = {
+            svc.id: svc for _, svc in vars(klass).items() if isinstance(svc, CIPService)
         }
 
         klass.__cip_services__ = services
@@ -153,42 +216,31 @@ class _MetaCIPObject(type):
         return klass
 
     def __customize_object__(cls) -> None: ...
-
+    @override
     def __repr__(cls):
         return cls.__name__
 
+    @override
     def __str__(cls):
         return f"{cls.__name__} ({cls.class_code:#04x})"
 
 
-def service(id: USINT):
-    def _service[T: _MetaCIPObject, **P, R](method: Callable[P, R]) -> Callable[P, R]:
-        class Service:
-            def __init__(self, method: Callable[P, R]) -> None:
-                self.method = cast(Callable[P, R], method)
-
-            def __set_name__(self, owner: T, name: str) -> None:
-                if not isinstance(owner, _MetaCIPObject):
-                    raise TypeError("services must be subclasses of CIPObject")
-                if not isinstance(self.method, classmethod):
-                    raise TypeError("services must be classmethods")
-
-                self.method.__func__.__cip_service_id__ = id  # type: ignore
-
-                setattr(owner, name, self.method)
-
-            def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-                return self.method(*args, **kwargs)
-
-        return Service(method)
-
-    return _service
-
-
-class AttrListItem[T: DataType](Protocol):
+class AttrListItem(Struct):
     id: UINT
     status: UINT
-    data: T | None
+    data: DataType | None = attr(default=None, conditional_on="status")
+
+
+type StatusCodesType = dict[
+    Literal["*"] | int,  # service messages apply to or '*' = any service
+    dict[
+        StatusEnum | int | Literal["*"],  # general status codes or '*' = any status
+        dict[  # map of ext status code (or any if '*') to message
+            int | StatusEnum | Literal["*"], str
+        ]
+        | type[StatusEnum],  # or an enum of all ext statuses
+    ],
+]
 
 
 class CIPObject(metaclass=_MetaCIPObject):
@@ -197,51 +249,53 @@ class CIPObject(metaclass=_MetaCIPObject):
     """
 
     class_code: ClassVar[int] = 0
+    __cip_services__: ClassVar[dict[USINT, CIPService[Self]]]
+    __cip_attributes__: ClassVar[dict[int, CIPAttribute[DataType, Self]]]
+    __cip_instance_attributes__: ClassVar[dict[str, CIPAttribute[DataType, Self]]]
+    __cip_class_attributes__: ClassVar[dict[str, CIPAttribute[DataType, Self]]]
+
+    __instance_struct__: ClassVar[type[Struct]]
+    __class_struct__: ClassVar[type[Struct]]
 
     class Instance(PredefinedValues):
-        CLASS = 0  #: The class itself and not an instance
-        DEFAULT = 1  #: The first instance of a class, used as the default if not specified
+        CLASS: int = 0  #: The class itself and not an instance
+        DEFAULT: int = 1  #: The first instance of a class, used as the default if not specified
 
     #: A map of service code, to general and extended status codes and messages
     #: `*` = Applies to any code, used as a fallback if code is not found
     #: `{ service | * : { general_status | * : {ext_status | * : message} } }`
-    STATUS_CODES: ClassVar[
-        dict[
-            Literal["*"] | int,  # service messages apply to or '*' = any service
-            dict[
-                StatusEnum | int | Literal["*"],  # general status codes or '*' = any status
-                dict[  # map of ext status code (or any if '*') to message
-                    int | StatusEnum | Literal["*"], str
-                ]
-                | type[StatusEnum],  # or an enum of all ext statuses
-            ],
-        ]
-    ] = {}
+    STATUS_CODES: ClassVar[StatusCodesType] = {}
 
     # --- Reserved class attributes, common to all object classes ---
 
     #: CIP object specification revision
-    object_revision = CIPAttribute(id=1, data_type=UINT, class_attr=True, get_all_class=True)
+    object_revision: CIPAttribute[UINT, Self] = CIPAttribute(id=1, data_type=UINT, class_attr=True, get_all_class=True)
     #: Maximum instance id for instances of the object
-    max_instance = CIPAttribute(id=2, data_type=UINT, class_attr=True, get_all_class=True)
+    max_instance: CIPAttribute[UINT, Self] = CIPAttribute(id=2, data_type=UINT, class_attr=True, get_all_class=True)
     #: Number of instances of the object
-    num_instances = CIPAttribute(id=3, data_type=UINT, class_attr=True, get_all_class=True)
+    num_instances: CIPAttribute[UINT, Self] = CIPAttribute(id=3, data_type=UINT, class_attr=True, get_all_class=True)
     #: List of attribute ids for optional attributes supported by device
-    optional_attrs_list = CIPAttribute(id=4, data_type=UINT[UINT], class_attr=True, get_all_class=False)
+    optional_attrs_list: CIPAttribute[Array[UINT, UINT], Self] = CIPAttribute(
+        id=4, data_type=Array[UINT, UINT], class_attr=True, get_all_class=False
+    )
     #: List of service codes for optional services supported by device
-    optional_service_list = CIPAttribute(id=5, data_type=UINT[UINT], class_attr=True, get_all_class=False)
+    optional_service_list: CIPAttribute[Array[UINT, UINT], Self] = CIPAttribute(
+        id=5, data_type=Array[UINT, UINT], class_attr=True, get_all_class=False
+    )
     #: The attribute id of the last (max) attribute supported by device
-    max_class_attr = CIPAttribute(id=6, data_type=UINT, class_attr=True, get_all_class=False)
+    max_class_attr: CIPAttribute[UINT, Self] = CIPAttribute(id=6, data_type=UINT, class_attr=True, get_all_class=False)
     #: The instance id of the last (max) instance of the object in the device
-    max_instance_attr = CIPAttribute(id=7, data_type=UINT, class_attr=True, get_all_class=False)
+    max_instance_attr: CIPAttribute[UINT, Self] = CIPAttribute(
+        id=7, data_type=UINT, class_attr=True, get_all_class=False
+    )
 
-    def __init__(self, instance: int | None, **kwargs) -> None:
+    def __init__(self, instance: int | None, **kwargs: DataType) -> None:
         self.instance: int = instance or 0
-
+        self.__attributes__: dict[str, CIPAttribute[DataType, Self]] = (
+            self.__cip_instance_attributes__ if self.instance else self.__cip_class_attributes__
+        )
         for attr_name, attr_value in kwargs.items():
             setattr(self, attr_name, attr_value)
-
-        self.__attributes__ = self.__cip_instance_attributes__ if self.instance else self.__cip_class_attributes__
 
     def __init_subclass__(cls) -> None:
         cls.__cip_objects__[cls.class_code] = cls
@@ -249,7 +303,8 @@ class CIPObject(metaclass=_MetaCIPObject):
     def dict(self) -> dict[str, DataType]:
         return {a: val for a in self.__attributes__ if (val := getattr(self, a, None)) is not None}
 
-    def __eq__(self, other) -> bool:
+    @override
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, CIPObject):
             return self.dict() == other.dict()
         elif isinstance(other, dict):
@@ -257,8 +312,7 @@ class CIPObject(metaclass=_MetaCIPObject):
         else:
             return False
 
-    @service(id=USINT(0x01))
-    @classmethod
+    @service(USINT(0x01))
     def get_attributes_all(cls, instance: int | None = 1) -> CIPRequest[Struct | BYTES]:
         if not instance:
             resp_type = cls.__class_struct__
@@ -270,7 +324,7 @@ class CIPObject(metaclass=_MetaCIPObject):
         )
         return CIPRequest(
             message=MessageRouterRequest.build(
-                service=cls.get_attributes_all.__cip_service_id__,  # type: ignore
+                service=cls.get_attributes_all.id,
                 class_code=cls.class_code,
                 instance=instance,
             ),
@@ -278,7 +332,6 @@ class CIPObject(metaclass=_MetaCIPObject):
         )
 
     @service(id=USINT(0x0E))
-    @classmethod
     def get_attribute_single[T: DataType, TObj: CIPObject](
         cls, attribute: CIPAttribute[T, TObj], instance: int | None = 1
     ) -> CIPRequest[T | BYTES]:
@@ -287,7 +340,7 @@ class CIPObject(metaclass=_MetaCIPObject):
         )
         return CIPRequest(
             message=MessageRouterRequest.build(
-                service=cls.get_attribute_single.__cip_service_id__,  # type: ignore
+                service=cls.get_attribute_single.id,
                 class_code=attribute.object.class_code,
                 instance=instance or 0,
                 attribute=attribute.id,
@@ -296,40 +349,35 @@ class CIPObject(metaclass=_MetaCIPObject):
         )
 
     @service(id=USINT(0x03))
-    @classmethod
     def get_attribute_list[TObj: CIPObject](
-        cls, attributes: Sequence[CIPAttribute[Any, TObj]], instance: int | None = 1
+        cls, attributes: Sequence[CIPAttribute[DataType, TObj]], instance: int | None = 1
     ) -> CIPRequest[Struct | BYTES]:
-        members: list[
-            tuple[str, type[DataType | AttrListItem[Any]]] | tuple[str, type[DataType] | AttrListItem[Any], Field]
-        ] = [("count", UINT, field())]
+        members: list[tuple[str, type[DataType], Field[DataType]]] = [("count", UINT, field())]
         for _attr in attributes:
             _GetAttrsListItem = cast(
-                type[AttrListItem[Any]],
+                type[AttrListItem],
                 type(
                     f"{_attr.name}_GetAttrListItem",
-                    (Struct,),
+                    (AttrListItem,),
                     {
-                        "data": attr(conditional_on="status"),
                         "__annotations__": {"id": UINT, "status": UINT, "data": _attr.data_type | None},
-                        "__bool__": (lambda self: self.status == SUCCESS),
                     },
                 ),
             )
 
-            members.append((_attr.name, _GetAttrsListItem))
+            members.append((_attr.name, _GetAttrsListItem, field()))
 
-        GetAttrListResp = cast(type[Struct], Struct.create(name="GetAttrListResp", members=members))  # pyright: ignore [reportArgumentType]
+        GetAttrListResp = Struct.create(name="GetAttrListResp", members=members)
 
         parser: CIPResponseParser[Struct | BYTES] = MsgRouterResponseParser(
             response_type=GetAttrListResp, failed_response_type=BYTES
         )
         return CIPRequest(
             message=MessageRouterRequest.build(
-                service=cls.get_attribute_list.__cip_service_id__,  # type: ignore
+                service=cls.get_attribute_list.id,
                 class_code=cls.class_code,
                 instance=instance or 0,
-                data=UINT[UINT](a.id for a in attributes),
+                data=array(UINT, UINT)([UINT(a.id) for a in attributes]),
             ),
             response_parser=parser,
         )
@@ -388,6 +436,7 @@ class CIPObject(metaclass=_MetaCIPObject):
     ) -> str | None:
         return None
 
+    @override
     def __repr__(self) -> str:
         attrs = [(name, val) for name in self.__attributes__ if (val := getattr(self, name, None)) is not None]
         attrs.insert(0, ("instance", self.instance))

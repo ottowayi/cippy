@@ -20,6 +20,7 @@ dev = [
     'ruff',
     'rich',
     "basedpyright>=1.31.1",
+    "typing-extensions>=4.14.1",
 ]
 test = [
     'pytest',
@@ -50,3 +51,5 @@ reportIgnoreCommentWithoutRule = false
 reportExplicitAny = false
 reportAny = false
 reportImportCycles = false
+reportPrivateLocalImportUsage = false
+reportUnnecessaryIsInstance = false

@@ -1,14 +1,15 @@
 import ipaddress
 import reprlib
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
 from math import log
-from typing import ClassVar, Generator, Self, Sequence, cast
+from typing import Any, ClassVar, Self, cast, override
 
 from cippy.exceptions import BufferEmptyError, DataError
 from cippy.util import IntEnumX
 
-from ._base import BYTES, BufferT, DataType, as_stream, buff_repr, array
+from ._base import BYTES, BufferT, DataType, array, as_stream, buff_repr
 from .numeric import UDINT, UINT, USINT
 from .string import SHORT_STRING
 
@@ -69,8 +70,9 @@ class CIPSegment(DataType):
 
     segment_type: ClassVar[SegmentType] = SegmentType.port
 
+    @override
     @classmethod
-    def encode(cls, value: "CIPSegment", padded: bool = False, *args, **kwargs) -> bytes:
+    def encode(cls, value: Self, padded: bool = False, *args: Any, **kwargs: Any) -> bytes:
         """
         Encodes an instance of a ``CIPSegment`` to bytes
         """
@@ -89,8 +91,9 @@ class CIPSegment(DataType):
 
         return segment_type
 
+    @override
     @classmethod
-    def decode(cls: "type[CIPSegment]", buffer: BufferT, padded: bool = False) -> "CIPSegment":
+    def decode(cls: "type[Self]", buffer: BufferT, padded: bool = False) -> Self:
         try:
             stream = as_stream(buffer)
             return cls._decode(stream, padded)
@@ -99,8 +102,9 @@ class CIPSegment(DataType):
         except Exception as err:
             raise DataError(f"Error unpacking {buff_repr(buffer)} as {cls.__name__}") from err
 
+    @override
     @classmethod
-    def _decode(cls, stream: BytesIO, padded: bool = False) -> "CIPSegment":
+    def _decode(cls, stream: BytesIO, padded: bool = False) -> Self:
         _peek = stream.getvalue()[stream.tell() : stream.tell() + 1]
         if not _peek:
             raise BufferEmptyError()
@@ -108,7 +112,7 @@ class CIPSegment(DataType):
         segment_type = _peek[0] & SegmentType.mask
         for subcls in CIPSegment.__subclasses__():
             if subcls.segment_type == segment_type:
-                return subcls.decode(stream, padded)
+                return cast(Self, subcls.decode(stream, padded))
 
         raise DataError(f"Unknown segment type: {_segment_type_bits(segment_type)}")
 
@@ -208,15 +212,16 @@ class PortSegment(CIPSegment):
         except Exception as err:
             raise DataError("Invalid link") from err
 
+    @override
     @classmethod
-    def _encode(cls, value: "PortSegment", padded: bool = False, *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, padded: bool = False, *args: Any, **kwargs: Any) -> bytes:
         segment_type = cls.segment_type | value._port
         if value._ex_link:
             segment_type |= PortSegmentFormat.ex_link_address
 
         msg = b"".join(
             (
-                bytes(x)  # type: ignore
+                bytes(x)
                 for x in (
                     USINT(segment_type),
                     value._ex_port if value._ex_port else b"",
@@ -230,8 +235,9 @@ class PortSegment(CIPSegment):
 
         return msg
 
+    @override
     @classmethod
-    def _decode(cls, stream: BytesIO, padded: bool = False) -> "PortSegment":
+    def _decode(cls, stream: BytesIO, padded: bool = False) -> Self:
         segment_type = cls._decode_segment_type(stream)
         ex_link = bool(segment_type & PortSegmentFormat.ex_link_address)
         port = segment_type & PortSegmentFormat.mask_port_id
@@ -267,7 +273,7 @@ class PortSegment(CIPSegment):
             except Exception:
                 raise DataError("Error decoding link address")
 
-        return PortSegment(port, link)
+        return cls(port, link)
 
 
 class LogicalSegmentType(IntEnumX):
@@ -348,8 +354,9 @@ class LogicalSegment(CIPSegment):
             else:
                 raise DataError("logical value too large")
 
+    @override
     @classmethod
-    def _encode(cls, value: "LogicalSegment", padded: bool = False, *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, padded: bool = False, *args: Any, **kwargs: Any) -> bytes:
         segment_type = bytes(USINT(cls.segment_type | value.type | value._format))
         if padded and value._format in (
             LogicalSegmentType.format_16bit,
@@ -359,8 +366,9 @@ class LogicalSegment(CIPSegment):
 
         return segment_type + value._value
 
+    @override
     @classmethod
-    def _decode(cls, stream: BytesIO, padded: bool = False) -> "LogicalSegment":
+    def _decode(cls, stream: BytesIO, padded: bool = False) -> Self:
         segment_type = cls._decode_segment_type(stream)
         _type = segment_type & LogicalSegmentType.mask_type
         _format = segment_type & LogicalSegmentType.mask_format
@@ -394,7 +402,7 @@ class LogicalSegment(CIPSegment):
                     value = USINT.decode(stream)
                 else:
                     if padded:
-                        BYTES[1].decode(stream)
+                        _ = BYTES[1].decode(stream)
                     if _format == LogicalSegmentType.format_16bit:
                         value = UINT.decode(stream)
                     else:
@@ -402,7 +410,7 @@ class LogicalSegment(CIPSegment):
             except Exception as err:
                 raise DataError("Error decoding logical value") from err
 
-        return LogicalSegment(LogicalSegmentType(_type & LogicalSegmentType.mask_type), value)
+        return cls(LogicalSegmentType(_type & LogicalSegmentType.mask_type), value)
 
 
 class NetworkSegmentType(IntEnumX):
@@ -445,8 +453,9 @@ class NetworkSegment(CIPSegment):
                 f"Network segment subtype {_network_type_bits(self.type)} requires exactly one byte of data"
             )
 
+    @override
     @classmethod
-    def _encode(cls, value: "NetworkSegment", *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         _segment_type = bytes(USINT(value.segment_type | value.type))
         if value.type & NetworkSegmentType.mask_data_array:
             _len = len(value.data)
@@ -456,8 +465,9 @@ class NetworkSegment(CIPSegment):
         else:
             return _segment_type + value.data
 
+    @override
     @classmethod
-    def _decode(cls, stream: BytesIO, padded: bool = False) -> "NetworkSegment":
+    def _decode(cls, stream: BytesIO, padded: bool = False) -> Self:
         segment_type = cls._decode_segment_type(stream)
         _type = segment_type & NetworkSegmentType.mask_type
         if _type not in _supported_network_segment_types:
@@ -473,7 +483,7 @@ class NetworkSegment(CIPSegment):
         except Exception as err:
             raise DataError("Error decoding Network segment data") from err
 
-        return NetworkSegment(NetworkSegmentType(_type), data)
+        return cls(NetworkSegmentType(_type), data)
 
 
 class SymbolicSegmentType(IntEnumX):
@@ -503,7 +513,7 @@ class SymbolicSegment(CIPSegment):
     symbol: str | USINT | UINT | UDINT | bytes
 
     #: Extended symbol type, only required when ``symbol`` is of type ``bytes``, else set automatically
-    #: If using double/triple byte extended format, this value be mutated to include the string length
+    #: If using double/triple byte extended format, this value will be mutated to include the string length
     ex_type: SymbolicSegmentExtendedFormat | int | None = None
 
     def __post_init__(self):
@@ -531,22 +541,26 @@ class SymbolicSegment(CIPSegment):
             self.ex_type = SymbolicSegmentExtendedFormat.numeric_symbol_usint
         elif isinstance(self.symbol, UINT):
             self.ex_type = SymbolicSegmentExtendedFormat.numeric_symbol_uint
-        elif isinstance(self.symbol, UDINT):
+        else:
             self.ex_type = SymbolicSegmentExtendedFormat.numeric_symbol_udint
 
+    @override
     @classmethod
-    def _encode(cls, value: "SymbolicSegment", *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         if isinstance(value.symbol, str):
             _type = bytes(USINT(cls.segment_type | len(value.symbol)))
             data = value.symbol.encode("ascii")
         else:
+            if value.ex_type is None:
+                raise DataError("symbol ex_type must not be None")
             _type = bytes(USINT(cls.segment_type)) + bytes(USINT(value.ex_type))
             data = bytes(value.symbol)
 
         return _type + data
 
+    @override
     @classmethod
-    def _decode(cls, stream: BytesIO, padded: bool = False) -> "SymbolicSegment":
+    def _decode(cls, stream: BytesIO, padded: bool = False) -> Self:
         segment_type = USINT.decode(stream)
         _type = segment_type & SymbolicSegmentType.mask_symbol_size
         if not _type:
@@ -571,7 +585,7 @@ class SymbolicSegment(CIPSegment):
             ex_type = None
             symbol = cls._stream_read(stream, _type).decode("ascii")
 
-        return SymbolicSegment(symbol, ex_type=ex_type)
+        return cls(symbol, ex_type=ex_type)
 
 
 class DataSegmentType(IntEnumX):
@@ -597,13 +611,17 @@ class DataSegment(CIPSegment):
     def __post_init__(self) -> None:
         self._type = DataSegmentType.simple if isinstance(self.data, bytes) else DataSegmentType.ansi_extended
 
+    @override
     @classmethod
-    def _encode(cls, value: "DataSegment", padded: bool = False, *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, padded: bool = False, *args: Any, **kwargs: Any) -> bytes:
         segment_type = cls.segment_type | value._type
-
         if value._type == DataSegmentType.simple:
-            data = bytes(USINT(len(value.data) // 2)) + value.data  # type: ignore
+            if not isinstance(value.data, bytes):
+                raise DataError("data must be bytes")
+            data = bytes(USINT(len(value.data) // 2)) + value.data
         else:
+            if isinstance(value.data, bytes):
+                raise DataError("data must be a string")
             data = bytes(SHORT_STRING(value.data))
             if padded and len(value.data) % 2:
                 data += b"\x00"
@@ -623,7 +641,7 @@ __EPATH_TYPE_CACHE__: dict[tuple[bool, bool, bool, int | None], "type[EPATH]"] =
 
 
 @dataclass
-class EPATH[T: CIPSegment](DataType):
+class EPATH(DataType):
     """
     CIP path segments
     """
@@ -634,17 +652,18 @@ class EPATH[T: CIPSegment](DataType):
     pad_len: ClassVar[bool] = False
     length: ClassVar[int | None] = None
 
-    segments: list[T]
+    segments: list[CIPSegment]
 
     def __post_init__(self) -> None:
-        if any(not isinstance(x, CIPSegment) for x in self.segments):
+        if any(not isinstance(x, CIPSegment) for x in self.segments):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise DataError("segments all must be instances of CIPSegment")
         if self.length is not None and len(self.segments) != self.length:
             raise DataError(f"length mismatch, require {self.length} segments, got {len(self.segments)}")
-        self.segments: list[T] = [s for s in self.segments]
+        self.segments = [s for s in self.segments]
 
+    @override
     @classmethod
-    def _encode(cls, value: "EPATH[T]", *args, **kwargs) -> bytes:
+    def _encode(cls, value: Self, *args: Any, **kwargs: Any) -> bytes:
         path = b"".join(segment.encode(segment, padded=cls.padded) for segment in value.segments)
         if cls.with_len:
             _len = USINT.encode(len(path) // 2)
@@ -653,6 +672,7 @@ class EPATH[T: CIPSegment](DataType):
             path = _len + path
         return path
 
+    @override
     @classmethod
     def _decode(cls, stream: BytesIO) -> Self:
         if cls.with_len:
@@ -669,15 +689,15 @@ class EPATH[T: CIPSegment](DataType):
                 ary_type = array(CIPSegment, cls.length)
 
             segments = [s for s in ary_type.decode(stream, padded=cls.padded)]
-        return cls(segments)  # type: ignore
+        return cls(segments)
 
-    def __truediv__(self, other: T | Sequence[T]) -> Self:
-        new_segments: list[T] = [other] if isinstance(other, CIPSegment) else [o for o in other]
+    def __truediv__(self, other: CIPSegment | Sequence[CIPSegment]) -> Self:
+        new_segments = [other] if isinstance(other, CIPSegment) else [o for o in other]
         return self.__class__([*self.segments, *new_segments])
 
     def __class_getitem__(cls, item: int) -> type[Self]:
-        if not isinstance(item, int):
-            raise ValueError("must be int to create fixed-size EPATH")
+        if not isinstance(item, int):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError("must be int to create fixed-size EPATH")  # pyright: ignore[reportUnreachable]
         key = (cls.padded, cls.with_len, cls.pad_len, item)
         if key not in __EPATH_TYPE_CACHE__:
             klass = type(
@@ -693,17 +713,17 @@ class EPATH[T: CIPSegment](DataType):
 
 
 class PADDED_EPATH(EPATH):
-    padded = True
+    padded: ClassVar[bool] = True
 
 
 class PACKED_EPATH(EPATH):
-    padded = False
+    padded: ClassVar[bool] = False
 
 
 class PADDED_EPATH_LEN(PADDED_EPATH):
-    with_len = True
+    with_len: ClassVar[bool] = True
 
 
 class PADDED_EPATH_PAD_LEN(PADDED_EPATH):
-    with_len = True
-    pad_len = True
+    with_len: ClassVar[bool] = True
+    pad_len: ClassVar[bool] = True

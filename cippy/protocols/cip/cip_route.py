@@ -14,7 +14,7 @@ from cippy.data_types import (
 from cippy.exceptions import DataError
 
 
-class CIPRoute(UserList):
+class CIPRoute(UserList[PortSegment]):
     def __init__(self, value: str | Iterable[PortSegment] | None = None) -> None:
         if isinstance(value, str):
             segments = self._str_to_port_segments(value)
@@ -23,7 +23,7 @@ class CIPRoute(UserList):
         else:
             segments = value
 
-        if any(not isinstance(x, PortSegment) for x in segments):
+        if any(not isinstance(x, PortSegment) for x in segments):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise DataError("segments all must be instances of PortSegment")
 
         super().__init__(segments)

@@ -1,8 +1,8 @@
 from enum import IntEnum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from cippy.const import VENDORS, DeviceTypes
-from cippy.data_types import SHORT_STRING, UDINT, UINT, USINT, WORD, Revision, Struct
+from cippy.data_types import SHORT_STRING, UDINT, UINT, USINT, WORD, Revision
 
 from ..cip_object import CIPAttribute, CIPObject
 
@@ -16,8 +16,7 @@ class Status(WORD):
     major_recoverable_fault: bool
     major_unrecoverable_fault: bool
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         bits = [bool(b) for b in self.bits]
         self.owned = bits[0]
         self.configured = bits[2]
