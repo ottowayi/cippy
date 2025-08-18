@@ -20,7 +20,7 @@ class STIME(DINT):
     Synchronous time information
     """
 
-    code = 0xCC  #: 0xCC
+    code: ClassVar[int] = 0xCC  #: 0xCC
 
 
 class DATE(UINT):
@@ -28,7 +28,7 @@ class DATE(UINT):
     Date information
     """
 
-    code = 0xCD  #: 0xCD
+    code: ClassVar[int] = 0xCD  #: 0xCD
 
 
 class TIME_OF_DAY(UDINT):
@@ -36,7 +36,7 @@ class TIME_OF_DAY(UDINT):
     Time of day
     """
 
-    code = 0xCE  #: 0xCE
+    code: ClassVar[int] = 0xCE  #: 0xCE
 
 
 class DATE_AND_TIME(Struct):
@@ -55,7 +55,7 @@ class FTIME(DINT):
     duration - high resolution
     """
 
-    code = 0xD6  #: 0xD6
+    code: ClassVar[int] = 0xD6  #: 0xD6
 
 
 class LTIME(LINT):
@@ -63,7 +63,7 @@ class LTIME(LINT):
     duration - long
     """
 
-    code = 0xD7  #: 0xD7
+    code: ClassVar[int] = 0xD7  #: 0xD7
 
 
 class ITIME(INT):
@@ -71,7 +71,7 @@ class ITIME(INT):
     duration - short
     """
 
-    code = 0xD8  #: 0xD8
+    code: ClassVar[int] = 0xD8  #: 0xD8
 
 
 class TIME(DINT):
@@ -79,4 +79,4 @@ class TIME(DINT):
     duration - milliseconds
     """
 
-    code = 0xDB  #: 0xDB
+    code: ClassVar[int] = 0xDB  #: 0xDB

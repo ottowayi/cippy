@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 
 from cippy.data_types import BYTES, USINT, DataType
 
@@ -17,7 +17,7 @@ class CIPResponseMessage(Protocol):
     general_status: USINT
 
 
-SUCCESS = USINT(0)
+SUCCESS: Final[USINT] = USINT(0)
 
 
 @dataclass

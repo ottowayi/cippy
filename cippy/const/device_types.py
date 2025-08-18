@@ -1,6 +1,9 @@
+from typing import final
+
 from cippy.util import PredefinedValues
 
 
+@final
 class DeviceTypes(PredefinedValues):
     generic_device = 0x00
     ac_drive = 0x02

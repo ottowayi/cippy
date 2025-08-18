@@ -1,10 +1,10 @@
-from typing import ClassVar, cast, Tuple
+from typing import ClassVar, Self
 
-from cippy.data_types import BYTES, EPATH, UINT, USINT, array, Array
+from cippy.data_types import BYTES, EPATH, UINT, USINT, Array
 
-from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, service
-from ..msg_router_services import message_router_service
 from .._base import CIPRequest
+from ..cip_object import CIPAttribute, CIPObject, GeneralStatusCodes, StatusCodesType, service
+from ..msg_router_services import message_router_service
 
 
 class MessageRouter(CIPObject):
@@ -12,38 +12,38 @@ class MessageRouter(CIPObject):
     The object handles routing service calls to objects within the device from client messages
     """
 
-    class_code = 0x02
+    class_code: int = 0x02
 
     #: List of supported objects (class codes)
-    object_list = CIPAttribute(id=1, data_type=array(UINT, UINT), get_all_instance=True)
+    object_list: CIPAttribute[Array[UINT, UINT], Self] = CIPAttribute(
+        id=1, data_type=Array[UINT, UINT], get_all_instance=True
+    )
     #: Max number of supported connections
-    num_available = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
+    num_available: CIPAttribute[UINT, Self] = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Number of currently active connections
-    num_active = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
+    num_active: CIPAttribute[UINT, Self] = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: List of connection ids for active connections
-    active_connections = CIPAttribute(id=4, data_type=array(UINT, ...), get_all_instance=True)
+    active_connections: CIPAttribute[Array[UINT, None], Self] = CIPAttribute(
+        id=4, data_type=Array[UINT, None], get_all_instance=True
+    )
 
-    SYMBOLIC_TRANSLATION_SERVICE_ID: ClassVar[USINT] = USINT(0x4B)
-
-    @service(id=SYMBOLIC_TRANSLATION_SERVICE_ID)
-    @classmethod
+    @service(id=USINT(0x4B))
     def symbolic_translation(cls, symbol: EPATH) -> CIPRequest[EPATH | BYTES]:
         """
         Translates a single `SymbolicSegment` `EPATH` to the equivalent `LogicalSegment` `EPATH` if one exists
         """
         request = message_router_service(
-            service=cls.SYMBOLIC_TRANSLATION_SERVICE_ID,
+            service=cls.symbolic_translation.id,
             class_code=cls.class_code,
             instance=None,
             request_data=symbol,
             response_type=EPATH,
             failed_response_type=BYTES,
         )
+        return request
 
-        return cast(CIPRequest[EPATH | BYTES], request)
-
-    STATUS_CODES = {
-        SYMBOLIC_TRANSLATION_SERVICE_ID: {
+    STATUS_CODES: ClassVar[StatusCodesType] = {
+        symbolic_translation.id: {
             GeneralStatusCodes.invalid_parameter: {
                 0x00: "Symbolic Path unknown",
                 0x01: "Symbolic Path destination not assigned",

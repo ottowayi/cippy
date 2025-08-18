@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import Any, ClassVar, override
 
 from cippy.data_types import BYTES, UDINT, UINT
 
@@ -18,7 +18,7 @@ class NOPService(EIPService[None, BYTES]):
     command: UINT = EncapsulationCommand.nop
 
     # defining this request statically, no need to regenerate it every time
-    _request: ClassVar[EIPRequest] = EIPRequest(
+    _request: ClassVar[EIPRequest[BYTES]] = EIPRequest(
         header=EtherNetIPHeader(
             command=EncapsulationCommand.nop,
             length=UINT(0),
@@ -28,7 +28,8 @@ class NOPService(EIPService[None, BYTES]):
         response_type=None,
     )
 
-    def __call__(self, *args, **kwargs) -> EIPRequest:
+    @override
+    def __call__(self, *args: Any, **kwargs: Any) -> EIPRequest[BYTES]:
         return self._request
 
 

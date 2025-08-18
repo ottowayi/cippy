@@ -159,13 +159,13 @@ class SequencedAddress(CPFItem):
 class UnconnectedData(CPFItem):
     type_id: UINT = attr(init=False, default=CPFItemType.unconnected_data)
     length: UINT = attr(init=False)
-    data: BYTES = attr(init=True, len_ref="length")
+    data: BYTES = attr(len_ref="length")
 
 
 class ConnectedData(CPFItem):
     type_id: UINT = attr(init=False, default=CPFItemType.connected_data)
     length: UINT = attr(init=False)
-    data: BYTES = attr(init=True, len_ref="length")
+    data: BYTES = attr(len_ref="length")
 
 
 class Sockaddr(Struct):
@@ -198,7 +198,7 @@ class CIPIdentity(CPFItem):
 
 class ListIdentityData(Struct):
     count: UINT = attr(init=False)
-    identities: Array[CPFItem, None] | Sequence[CPFItem] = attr(len_ref="count")
+    identities: Array[CIPIdentity, None] | Sequence[CIPIdentity] = attr(len_ref="count")
 
 
 class RegisterSessionData(Struct):
@@ -224,7 +224,7 @@ InterfaceInfo = BYTES
 
 class ListInterfacesData(Struct):
     count: UINT | int = attr(init=False)
-    interfaces: Array[CPFItem, None] | Sequence[CPFItem] = attr(len_ref="count")
+    interfaces: Array[InterfaceInfo, None] | Sequence[InterfaceInfo] = attr(len_ref="count")
 
 
 type AddressItemsT = NullAddress | SequencedAddress | ConnectedAddress
@@ -260,7 +260,7 @@ class CommonPacketFormat[AddrT: AddressItemsT, DataT: DataItemsT](Struct):
 
 
 type SendRRDataPacketFormat = CommonPacketFormat[NullAddress, UnconnectedData]
-type SendUnitDataPacketFormat = CommonPacketFormat[SequencedAddress, ConnectedData]
+type SendUnitDataPacketFormat = CommonPacketFormat[ConnectedAddress, ConnectedData]
 
 
 class SendRRDataData(Struct):

@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 from cippy.const import VENDORS, DeviceTypes
 from cippy.data_types import SHORT_STRING, UDINT, UINT, USINT, WORD, Revision
@@ -34,29 +34,29 @@ class Identity(CIPObject):
     components, multiple instances of this object may be created.
     """
 
-    class_code = 0x01
+    class_code: int = 0x01
 
     # --- Required attributes ---
     #: Identification code assigned to the vendor
-    vendor_id = CIPAttribute(id=1, data_type=UINT, get_all_instance=True)
+    vendor_id: CIPAttribute[UINT, Self] = CIPAttribute(id=1, data_type=UINT, get_all_instance=True)
     #: Indication of general type of product
-    device_type = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
+    device_type: CIPAttribute[UINT, Self] = CIPAttribute(id=2, data_type=UINT, get_all_instance=True)
     #: Identification code of a particular product for an individual vendor
-    product_code = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
+    product_code: CIPAttribute[UINT, Self] = CIPAttribute(id=3, data_type=UINT, get_all_instance=True)
     #: Revision of the item the Identity Object represents
-    revision = CIPAttribute(id=4, data_type=Revision, get_all_instance=True)
+    revision: CIPAttribute[Revision, Self] = CIPAttribute(id=4, data_type=Revision, get_all_instance=True)
     #: Summary status of the device
-    status = CIPAttribute(id=5, data_type=Status, get_all_instance=True)
+    status: CIPAttribute[UINT, Self] = CIPAttribute(id=5, data_type=Status, get_all_instance=True)
     #: Serial number of the device
-    serial_number = CIPAttribute(id=6, data_type=UDINT, get_all_instance=True)
+    serial_number: CIPAttribute[UDINT, Self] = CIPAttribute(id=6, data_type=UDINT, get_all_instance=True)
     #: Human readable identification of the device
-    product_name = CIPAttribute(id=7, data_type=SHORT_STRING, get_all_instance=True)
+    product_name: CIPAttribute[SHORT_STRING, Self] = CIPAttribute(id=7, data_type=SHORT_STRING, get_all_instance=True)
 
     # TODO: add custom type for status that shows what the bits mean
 
     # --- Optional attributes ---
     #: Present state of the device, see :class:`~IdentityObject.States`
-    state = CIPAttribute(id=8, data_type=USINT)
+    state: CIPAttribute[USINT, Self] = CIPAttribute(id=8, data_type=USINT)
 
     class States(IntEnum):
         """
@@ -101,14 +101,14 @@ class Identity(CIPObject):
         """
         String version of the serial number formatted as 8 uppercase hex digits.
         """
-        return f"{self.serial_number:@X}" if self.serial_number is not None else None
+        return f"{self.serial_number:@X}" if self.serial_number is not None else None  # pyright: ignore[reportUnnecessaryComparison]
 
     @property
     def rev(self) -> str | None:
         """
         String version of the revision number
         """
-        return f"{self.revision:@}" if self.revision is not None else None
+        return f"{self.revision:@}" if self.revision is not None else None  # pyright: ignore[reportUnnecessaryComparison]
 
     @property
     def device_type_name(self) -> str | None:

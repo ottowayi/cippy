@@ -1,17 +1,18 @@
 from typing import Annotated, Self
 
 from cippy.data_types import (
-    SHORT_STRING,
-    Struct,
-    PADDED_EPATH,
     PACKED_EPATH,
+    PADDED_EPATH,
     PADDED_EPATH_PAD_LEN,
+    SHORT_STRING,
     UINT,
     Array,
+    Struct,
     array,
 )
 from cippy.util import IntEnumX
-from ..cip_object import CIPObject, CIPAttribute
+
+from ..cip_object import CIPAttribute, CIPObject
 
 
 class InstanceInfo(Struct):

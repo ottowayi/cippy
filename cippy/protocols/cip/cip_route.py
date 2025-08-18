@@ -1,5 +1,6 @@
 from collections import UserList
-from typing import Iterable, Literal, Self, overload
+from collections.abc import Iterable
+from typing import Literal, Self, overload, override
 
 from cippy.data_types import (
     EPATH,
@@ -7,7 +8,6 @@ from cippy.data_types import (
     PADDED_EPATH,
     PADDED_EPATH_LEN,
     PADDED_EPATH_PAD_LEN,
-    PORT_ALIASES,
     PortIdentifier,
     PortSegment,
 )
@@ -23,7 +23,7 @@ class CIPRoute(UserList[PortSegment]):
         else:
             segments = value
 
-        if any(not isinstance(x, PortSegment) for x in segments):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if any(not isinstance(x, PortSegment) for x in segments):
             raise DataError("segments all must be instances of PortSegment")
 
         super().__init__(segments)
@@ -47,9 +47,9 @@ class CIPRoute(UserList[PortSegment]):
             case CIPRoute():
                 new_segments = other.data
             case EPATH():
-                new_segments = other.segments
-            case _:
-                raise DataError(f"unsupported type {other!r}")
+                new_segments = other.segments  # type: ignore
+            case _:  # pyright: ignore[reportUnnecessaryComparison]
+                raise DataError(f"unsupported type {other!r}")  # pyright: ignore[reportUnreachable]
 
         return self.__class__((*self.data, *new_segments))
 
@@ -89,5 +89,6 @@ class CIPRoute(UserList[PortSegment]):
         _pairs = [(_split_route[i], _split_route[i + 1]) for i in range(0, len(_split_route), 2)]
         return [PortSegment(port, link) for port, link in _pairs]
 
+    @override
     def __str__(self):
         return "/".join(f"{s.port!s}/{s.link_address}" for s in self.data)

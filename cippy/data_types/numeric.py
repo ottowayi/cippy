@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from ._core_types import IntDataType, FloatDataType
 
 # fmt: off
@@ -14,8 +16,8 @@ class SINT(IntDataType):
     Signed 8-bit integer
     """
 
-    code = 0xC2  #: 0xC2
-    _format = "<b"
+    code: ClassVar[int] = 0xC2  #: 0xC2
+    _format: ClassVar[str] = "<b"
 
 
 class INT(IntDataType):
@@ -23,8 +25,8 @@ class INT(IntDataType):
     Signed 16-bit integer
     """
 
-    code = 0xC3  #: 0xC3
-    _format = "<h"
+    code: ClassVar[int] = 0xC3  #: 0xC3
+    _format: ClassVar[str] = "<h"
 
 
 class DINT(IntDataType):
@@ -32,8 +34,8 @@ class DINT(IntDataType):
     Signed 32-bit integer
     """
 
-    code = 0xC4  #: 0xC4
-    _format = "<i"
+    code: ClassVar[int] = 0xC4  #: 0xC4
+    _format: ClassVar[str] = "<i"
 
 
 class LINT(IntDataType):
@@ -41,8 +43,8 @@ class LINT(IntDataType):
     Signed 64-bit integer
     """
 
-    code = 0xC5  #: 0xC5
-    _format = "<q"
+    code: ClassVar[int] = 0xC5  #: 0xC5
+    _format: ClassVar[str] = "<q"
 
 
 class USINT(IntDataType):
@@ -50,8 +52,8 @@ class USINT(IntDataType):
     Unsigned 8-bit integer
     """
 
-    code = 0xC6  #: 0xC6
-    _format = "<B"
+    code: ClassVar[int] = 0xC6  #: 0xC6
+    _format: ClassVar[str] = "<B"
 
 
 class UINT(IntDataType):
@@ -59,8 +61,8 @@ class UINT(IntDataType):
     Unsigned 16-bit integer
     """
 
-    code = 0xC7  #: 0xC7
-    _format = "<H"
+    code: ClassVar[int] = 0xC7  #: 0xC7
+    _format: ClassVar[str] = "<H"
 
 
 class UDINT(IntDataType):
@@ -68,8 +70,8 @@ class UDINT(IntDataType):
     Unsigned 32-bit integer
     """
 
-    code = 0xC8  #: 0xC8
-    _format = "<I"
+    code: ClassVar[int] = 0xC8  #: 0xC8
+    _format: ClassVar[str] = "<I"
 
 
 class ULINT(IntDataType):
@@ -77,8 +79,8 @@ class ULINT(IntDataType):
     Unsigned 64-bit integer
     """
 
-    code = 0xC9  #: 0xC9
-    _format = "<Q"
+    code: ClassVar[int] = 0xC9  #: 0xC9
+    _format: ClassVar[str] = "<Q"
 
 
 class REAL(FloatDataType):
@@ -86,8 +88,8 @@ class REAL(FloatDataType):
     32-bit floating point
     """
 
-    code = 0xCA  #: 0xCA
-    _format = "<f"
+    code: ClassVar[int] = 0xCA  #: 0xCA
+    _format: ClassVar[str] = "<f"
 
 
 class LREAL(FloatDataType):
@@ -95,8 +97,8 @@ class LREAL(FloatDataType):
     64-bit floating point
     """
 
-    code = 0xCB  #: 0xCB
-    _format = "<d"
+    code: ClassVar[int] = 0xCB  #: 0xCB
+    _format: ClassVar[str] = "<d"
 
 
 #
@@ -109,7 +111,7 @@ class SINT_BE(IntDataType):
     Signed 8-bit integer, big-endian
     """
 
-    _format = ">b"
+    _format: ClassVar[str] = ">b"
 
 
 class INT_BE(IntDataType):
@@ -117,7 +119,7 @@ class INT_BE(IntDataType):
     Signed 16-bit integer, big-endian
     """
 
-    _format = ">h"
+    _format: ClassVar[str] = ">h"
 
 
 class DINT_BE(IntDataType):
@@ -125,7 +127,7 @@ class DINT_BE(IntDataType):
     Signed 32-bit integer, big-endian
     """
 
-    _format = ">i"
+    _format: ClassVar[str] = ">i"
 
 
 class LINT_BE(IntDataType):
@@ -133,7 +135,7 @@ class LINT_BE(IntDataType):
     Signed 64-bit integer, big-endian
     """
 
-    _format = ">q"
+    _format: ClassVar[str] = ">q"
 
 
 class USINT_BE(IntDataType):
@@ -141,7 +143,7 @@ class USINT_BE(IntDataType):
     Unsigned 8-bit integer, big-endian
     """
 
-    _format = ">B"
+    _format: ClassVar[str] = ">B"
 
 
 class UINT_BE(IntDataType):
@@ -149,7 +151,7 @@ class UINT_BE(IntDataType):
     Unsigned 16-bit integer, big-endian
     """
 
-    _format = ">H"
+    _format: ClassVar[str] = ">H"
 
 
 class UDINT_BE(IntDataType):
@@ -157,7 +159,7 @@ class UDINT_BE(IntDataType):
     Unsigned 32-bit integer, big-endian
     """
 
-    _format = ">I"
+    _format: ClassVar[str] = ">I"
 
 
 class ULINT_BE(IntDataType):
@@ -165,4 +167,4 @@ class ULINT_BE(IntDataType):
     Unsigned 64-bit integer, big-endian
     """
 
-    _format = ">Q"
+    _format: ClassVar[str] = ">Q"

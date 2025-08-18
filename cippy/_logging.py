@@ -1,9 +1,10 @@
 import contextlib
 import logging
 import string
-from typing import Final, Generator, Literal, cast
+from typing import Final, Literal, cast, override, Any
+from collections.abc import Generator
 
-__all__ = ("Pycomm3Logger", "get_logger", "configure_logging", "VERBOSE_LEVEL")
+__all__ = ("CippyLogger", "get_logger", "configure_logging", "VERBOSE_LEVEL")
 VERBOSE_LEVEL: Final[int] = logging.DEBUG - 5
 VERBOSE_NAME: Final[str] = "VERBOSE"
 
@@ -11,8 +12,8 @@ logging.VERBOSE = VERBOSE_LEVEL  # type: ignore
 logging.addLevelName(VERBOSE_LEVEL, VERBOSE_NAME)
 
 
-class Pycomm3Logger(logging.getLoggerClass()):
-    def verbose(self, msg, *args, **kwargs):
+class CippyLogger(logging.getLoggerClass()):
+    def verbose(self, msg: str, *args: Any, **kwargs: Any):
         if self.isEnabledFor(VERBOSE_LEVEL):
             self.log(VERBOSE_LEVEL, msg, *args, stacklevel=kwargs.pop("stacklevel", 2), **kwargs)
 
@@ -20,7 +21,10 @@ class Pycomm3Logger(logging.getLoggerClass()):
         self.verbose("%s\n    %r\n%s", title, data, LazyHexDump(data), stacklevel=3)
 
 
-class Pycomm3Formatter(logging.Formatter):
+class CippyFormatter(logging.Formatter):
+    _fmt: str | None
+
+    @override
     def format(self, record: logging.LogRecord) -> str:
         if record.levelno == VERBOSE_LEVEL:
             with self.temp_log_format("{msg}"):
@@ -32,21 +36,21 @@ class Pycomm3Formatter(logging.Formatter):
 
     @contextlib.contextmanager
     def temp_log_format(self, fmt: str) -> Generator[None, None, None]:
+        orig_fmt: str | None = self._fmt
         try:
-            orig_fmt: str | None = self._fmt
             self._fmt = fmt
             yield
         finally:
-            self._fmt = orig_fmt  # type: ignore
+            self._fmt = orig_fmt
 
 
-logging.setLoggerClass(Pycomm3Logger)
+logging.setLoggerClass(CippyLogger)
 
 
-def get_logger(name: str) -> Pycomm3Logger:
+def get_logger(name: str) -> CippyLogger:
     if not name.startswith("cippy"):
         name = f"cippy.{name}"
-    return cast(Pycomm3Logger, logging.getLogger(name))
+    return cast(CippyLogger, logging.getLogger(name))
 
 
 DEFAULT_FORMAT: Final[str] = "{asctime} [{levelname}] {name}.{funcName}:{lineno}:: {message}"
@@ -60,7 +64,7 @@ def configure_logging(
 ) -> None:
     if handler is None:
         handler = logging.StreamHandler()
-    handler.setFormatter(Pycomm3Formatter(fmt=fmt, style=fmt_style))
+    handler.setFormatter(CippyFormatter(fmt=fmt, style=fmt_style))
     logger = logging.getLogger("cippy")
     logger.addHandler(handler)
     logger.setLevel(level)
@@ -71,7 +75,7 @@ PRINTABLE: set[int] = set(
 )
 
 
-def _to_ascii(bites):
+def _to_ascii(bites: bytes) -> str:
     return "".join(f"{chr(b)}" if b in PRINTABLE else "•" for b in bites)
 
 
@@ -87,9 +91,10 @@ def hex_dump(msg: bytes) -> str:
 
 
 class LazyHexDump:
-    def __init__(self, data):
-        self._data = data
+    def __init__(self, data: bytes):
+        self._data: bytes = data
 
+    @override
     def __str__(self):
         return hex_dump(self._data)
 

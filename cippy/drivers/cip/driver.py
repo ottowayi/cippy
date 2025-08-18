@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, Generator, Self, Sequence, cast
-
+from typing import Any, Self, cast
+from collections.abc import Generator, Sequence
 from cippy._logging import get_logger
 from cippy.data_types import DataType
 from cippy.protocols.cip import CIPConfig, CIPConnection, CIPRoute
@@ -14,6 +14,7 @@ class CIPDriver:
     __log = get_logger(__qualname__)
 
     def __init__(self, path: str | None = None, connection: CIPConnection | None = None) -> None:
+        self._connection: CIPConnection
         match path, connection:
             case None, None:
                 raise ValueError("must supply `path` or `connection`")

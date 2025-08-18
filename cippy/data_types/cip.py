@@ -652,10 +652,10 @@ class EPATH(DataType):
     pad_len: ClassVar[bool] = False
     length: ClassVar[int | None] = None
 
-    segments: list[CIPSegment]
+    segments: Sequence[CIPSegment]
 
     def __post_init__(self) -> None:
-        if any(not isinstance(x, CIPSegment) for x in self.segments):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if any(not isinstance(x, CIPSegment) for x in self.segments):
             raise DataError("segments all must be instances of CIPSegment")
         if self.length is not None and len(self.segments) != self.length:
             raise DataError(f"length mismatch, require {self.length} segments, got {len(self.segments)}")
@@ -696,7 +696,7 @@ class EPATH(DataType):
         return self.__class__([*self.segments, *new_segments])
 
     def __class_getitem__(cls, item: int) -> type[Self]:
-        if not isinstance(item, int):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if not isinstance(item, int):
             raise ValueError("must be int to create fixed-size EPATH")  # pyright: ignore[reportUnreachable]
         key = (cls.padded, cls.with_len, cls.pad_len, item)
         if key not in __EPATH_TYPE_CACHE__:

@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from ._core_types import BitArrayType, BoolDataType
 from .numeric import UDINT, UINT, ULINT, USINT
 
@@ -10,8 +12,8 @@ class BOOL(BoolDataType):
     ``True`` encoded as ``0xFF`` and ``False`` as ``0x00``
     """
 
-    code = 0xC1  #: 0xC1
-    size = 1
+    code: ClassVar[int] = 0xC1  #: 0xC1
+    size: ClassVar[int] = 1
 
 
 class BYTE(BitArrayType, USINT):
@@ -19,7 +21,7 @@ class BYTE(BitArrayType, USINT):
     bit string - 8-bits
     """
 
-    code = 0xD1  #: 0xD1
+    code: ClassVar[int] = 0xD1  #: 0xD1
 
 
 class WORD(BitArrayType, UINT):
@@ -27,7 +29,7 @@ class WORD(BitArrayType, UINT):
     bit string - 16-bits
     """
 
-    code = 0xD2  #: 0xD2
+    code: ClassVar[int] = 0xD2  #: 0xD2
 
 
 class DWORD(BitArrayType, UDINT):
@@ -35,7 +37,7 @@ class DWORD(BitArrayType, UDINT):
     bit string - 32-bits
     """
 
-    code = 0xD3  #: 0xD3
+    code: ClassVar[int] = 0xD3  #: 0xD3
 
 
 class LWORD(BitArrayType, ULINT):
@@ -43,7 +45,7 @@ class LWORD(BitArrayType, ULINT):
     bit string - 64-bits
     """
 
-    code = 0xD4  #: 0xD4
+    code: ClassVar[int] = 0xD4  #: 0xD4
 
 
 class ENGUNIT(WORD):  # noqa
@@ -51,5 +53,5 @@ class ENGUNIT(WORD):  # noqa
     engineering units
     """
 
-    code = 0xDD  #: 0xDD
+    code: ClassVar[int] = 0xDD  #: 0xDD
     # TODO: create lookup table of defined eng. units

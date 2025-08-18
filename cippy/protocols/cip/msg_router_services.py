@@ -3,10 +3,8 @@ Base objects for explicit messaging with the MessageRouter object.
 Includes request/response types and base service and parser classes
 """
 
-from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, cast
-
+from typing import TYPE_CHECKING, ClassVar
 
 from cippy._logging import get_logger
 from cippy.data_types import (
@@ -23,13 +21,13 @@ from cippy.data_types import (
     attr,
 )
 from cippy.data_types.cip import CIPSegment
-from cippy.exceptions import DataError
 
 from ._base import SUCCESS, CIPRequest, CIPResponse, CIPResponseParser
 
 if TYPE_CHECKING:
-    from .cip_object import CIPAttribute, CIPObject
     from typing_extensions import TypeIs
+
+    from .cip_object import CIPAttribute, CIPObject
 
 
 def cip_object_from_path(path: EPATH) -> "type[CIPObject]":

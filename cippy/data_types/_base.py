@@ -351,30 +351,18 @@ def _default_conditional_callable(value: DataType | int) -> bool:
     return value == 0
 
 
-# @overload  # if a default is provided
-# def attr[T: DataType](
-#     *,
-#     default: T,
-#     init: Literal[True] = True,
-#     reserved: Literal[False] = False,
-#     len_ref: LenRef | str | None = None,
-#     size_ref: SizeRef | bool | str = False,
-#     conditional_on: ConditionalOn | str | None = None,
-#     fmt: str | None = None,
-#     **kwargs: Any,
-# ) -> T: ...
-# @overload
-# def attr[T: DataType](
-#     *,
-#     default: DataType | None = None,
-#     reserved: Literal[True] = True,
-#     init: Literal[False] = False,
-#     len_ref: LenRef | str | None = None,
-#     size_ref: SizeRef | bool | str = False,
-#     conditional_on: ConditionalOn | str | None = None,
-#     fmt: str | None = None,
-#     **kwargs: Any,
-# ) -> Any: ...
+@overload
+def attr[T: DataType](*, default: T | None, conditional_on: ConditionalOn | str, **kwargs: Any) -> T | None: ...
+@overload
+def attr[T: DataType](*, default: T | None = None, init: Literal[False] = False, **kwargs: Any) -> T: ...
+@overload
+def attr(*, default: None, **kwargs: Any) -> Any: ...
+@overload
+def attr[T: DataType](
+    *,
+    default: T,
+    **kwargs: Any,
+) -> T: ...
 def attr[T: DataType](
     *,
     default: T | None = None,
@@ -462,7 +450,7 @@ class _StructMeta(DataclassMeta, _DataTypeMeta):  # pyright: ignore[reportUnsafe
         _repr = True
         if any(getattr(b, "__field_descriptions__", None) for b in bases) or cls_dict.get("__field_descriptions__"):
             _repr = False
-        cls = cast("type[Struct]", super().__new__(mcs, name, bases, cls_dict, repr=_repr))
+        cls = super().__new__(mcs, name, bases, cls_dict, repr=_repr)
         _process_fields(cls)
         return cls
 
@@ -1015,11 +1003,11 @@ class BYTES(ElementaryDataType[bytes], bytes, metaclass=_ElementaryDataTypeMeta)
         return cls(data)
 
     @override
-    def __getitem__(self, item: "int | IntDataType | slice") -> bytes:  # pyright: ignore[reportIncompatibleMethodOverride]
+    def __getitem__(self, item: "int | IntDataType | slice") -> "BYTES":  # pyright: ignore[reportIncompatibleMethodOverride]
         if isinstance(item, int):
-            return super().__getitem__(slice(item, item + 1))
+            return BYTES(super().__getitem__(slice(item, item + 1)))
 
-        return super().__getitem__(item)
+        return BYTES(super().__getitem__(item))
 
     @override
     def __repr__(self) -> str:

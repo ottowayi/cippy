@@ -20,7 +20,7 @@ class DataclassMeta(type):
     also require the dataclass decorator.
     """
 
-    def __new__(mcs, name: str, bases: tuple[type, ...], cls_dict: dict[str, Any], **kwargs: Any):
+    def __new__[T](mcs, name: str, bases: tuple[type[T], ...], cls_dict: dict[str, Any], **kwargs: Any) -> type[T]:
         cls = super().__new__(mcs, name, bases, cls_dict)
         return dataclass(cls, **kwargs)  # type: ignore
 

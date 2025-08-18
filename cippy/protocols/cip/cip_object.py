@@ -110,17 +110,17 @@ class _ServiceCallable[T: "CIPObject", **P, R: DataType]:
         return self.method(self.obj, *args, **kwargs)
 
 
-class CIPService[T: "CIPObject"]:
+class CIPService[T: "CIPObject", R: DataType]:
     name: str  # pyright: ignore[reportUninitializedInstanceVariable]
 
-    def __init__[**P, R: DataType](self, /, _id: int | USINT, method: ServiceMethod[T, P, R]):
+    def __init__[**P](self, /, _id: int | USINT, method: ServiceMethod[T, P, R]):
         self.id: USINT = _id if isinstance(_id, USINT) else USINT(_id)
-        self.method: ServiceMethod[T, ..., ...] = method
+        self.method: ServiceMethod[T, ..., R] = method
 
     def __set_name__(self, owner: type[T], name: str) -> None:
         self.name = name
 
-    def __get__[**P](self, instance: "T | None", owner: "type[T] | None" = None) -> _ServiceCallable[T, P, DataType]:
+    def __get__[**P](self, instance: "T | None", owner: "type[T] | None" = None) -> _ServiceCallable[T, P, R]:
         obj = cast(type[T], owner if instance is None else instance.__class__)
 
         svc = _ServiceCallable(self.id, obj, self.method)
@@ -130,7 +130,7 @@ class CIPService[T: "CIPObject"]:
 
 def service[T: "CIPObject", **P, R: DataType](
     id: USINT | int,
-) -> Callable[[ServiceMethod[T, P, R]], CIPService[T]]:
+) -> Callable[[ServiceMethod[T, P, R]], CIPService[T, R]]:
     """
     A decorator to create CIP services, aka CIPObject methods that return a CIPRequest.
     Each service requires a service code (`id`). The decorator behaves similar to `@classmethod`,
@@ -139,7 +139,7 @@ def service[T: "CIPObject", **P, R: DataType](
 
     """
 
-    def _service(method: ServiceMethod[T, P, R] | Callable[Concatenate[type[T], P], CIPRequest[R]]) -> CIPService[T]:
+    def _service(method: ServiceMethod[T, P, R] | Callable[Concatenate[type[T], P], CIPRequest[R]]) -> CIPService[T, R]:
         if isinstance(method, classmethod):
             _method = cast(ServiceMethod[T, P, R], method.__func__)
         else:
@@ -147,9 +147,6 @@ def service[T: "CIPObject", **P, R: DataType](
         return CIPService(_id=id, method=_method)
 
     return _service
-
-
-# pyright: reportUninitializedInstanceVariable = true
 
 
 class _MetaCIPObject(type):
@@ -192,7 +189,7 @@ class _MetaCIPObject(type):
         #         looks like most objects are in attribute id number order, so just doing that for now.
         klass.__instance_struct__ = Struct.create(
             f"{name}Instance",
-            [
+            [  # pyright: ignore[reportUnknownArgumentType]
                 (a.name, a.data_type, attr(len_ref=a.len_ref))
                 for a in sorted(klass.__cip_instance_attributes__.values(), key=lambda x: x.id)
                 if a.get_all_instance
@@ -200,14 +197,14 @@ class _MetaCIPObject(type):
         )
         klass.__class_struct__ = Struct.create(
             f"{name}Class",
-            [
+            [  # pyright: ignore[reportUnknownArgumentType]
                 (a.name, a.data_type, attr(len_ref=a.len_ref))
                 for a in sorted(klass.__cip_class_attributes__.values(), key=lambda x: x.id)
                 if a.get_all_class
             ],
         )
 
-        services: dict[USINT, CIPService[T]] = {
+        services: dict[USINT, CIPService[T, DataType]] = {
             svc.id: svc for _, svc in vars(klass).items() if isinstance(svc, CIPService)
         }
 
@@ -249,7 +246,7 @@ class CIPObject(metaclass=_MetaCIPObject):
     """
 
     class_code: ClassVar[int] = 0
-    __cip_services__: ClassVar[dict[USINT, CIPService[Self]]]
+    __cip_services__: ClassVar[dict[USINT, CIPService[Self, DataType]]]
     __cip_attributes__: ClassVar[dict[int, CIPAttribute[DataType, Self]]]
     __cip_instance_attributes__: ClassVar[dict[str, CIPAttribute[DataType, Self]]]
     __cip_class_attributes__: ClassVar[dict[str, CIPAttribute[DataType, Self]]]
@@ -429,10 +426,10 @@ class CIPObject(metaclass=_MetaCIPObject):
     @classmethod
     def _customize_extended_status(
         cls,
-        general_status: int,
-        ext_status: int,
-        ext_status_extra: Sequence[int],
-        extra_data: DataType | None,
+        general_status: int,  # pyright: ignore[reportUnusedParameter]
+        ext_status: int,  # pyright: ignore[reportUnusedParameter]
+        ext_status_extra: Sequence[int],  # pyright: ignore[reportUnusedParameter]
+        extra_data: DataType | None,  # pyright: ignore[reportUnusedParameter]
     ) -> str | None:
         return None
 

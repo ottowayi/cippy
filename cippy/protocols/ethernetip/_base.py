@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any, override
 
 from cippy.data_types import BYTES, UDINT, UINT, DataclassMeta, DataType
 
@@ -6,7 +7,7 @@ from .data_types import DEFAULT_CONTEXT, ETHERNETIP_STATUS_CODES, EtherNetIPHead
 
 
 @dataclass
-class EIPRequest[T: DataType | None]:
+class EIPRequest[T: DataType]:
     # the request header
     header: EtherNetIPHeader
     # service data, encoded
@@ -19,6 +20,7 @@ class EIPRequest[T: DataType | None]:
     def __post_init__(self):
         self.message = bytes(self.header) + self.data
 
+    @override
     def __str__(self):
         return f"EIPRequest(header={self.header!s}, data={self.data!r})"
 
@@ -32,10 +34,10 @@ class EIPService[ReqT: DataType | None, RespT: DataType](metaclass=DataclassMeta
     def __call__(
         self,
         session: UDINT,
-        *args,
+        *args: Any,
         data: ReqT | None = None,
         context: BYTES[8] = DEFAULT_CONTEXT,
-        **kwargs,
+        **kwargs: Any,
     ) -> EIPRequest[RespT]:
         #
         _data = data or self.data
@@ -45,10 +47,10 @@ class EIPService[ReqT: DataType | None, RespT: DataType](metaclass=DataclassMeta
 
 
 @dataclass
-class EIPResponse[T: DataType | None]:
+class EIPResponse[T: DataType]:
     request: EIPRequest[T] = field(repr=False)
     header: EtherNetIPHeader
-    data: T
+    data: T | None
     status_msg: str = field(init=False)
 
     def __post_init__(self):
@@ -57,7 +59,8 @@ class EIPResponse[T: DataType | None]:
         )
 
     def __bool__(self) -> bool:
-        return self.header is not None and self.header.status == EtherNetIPStatus.Success
+        return self.header is not None and self.header.status == EtherNetIPStatus.Success  # pyright: ignore[reportUnnecessaryComparison]
 
+    @override
     def __str__(self):
         return f"EIPResponse(header={self.header!s}, data={self.data!r}, request={self.request!s})"

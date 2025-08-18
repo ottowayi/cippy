@@ -6,10 +6,10 @@ from enum import Enum, IntEnum
 from io import BytesIO
 from typing import ClassVar, Self, override, Any
 
-from ..exceptions import BufferEmptyError, DataError
-from ._base import BufferT, DataType, ElementaryDataType, as_stream, buff_repr
+from ._base import BufferT, ElementaryDataType, as_stream, buff_repr
 from ._core_types import StringDataType, StrLenT
 from .numeric import UDINT, UINT, USINT
+from ..exceptions import BufferEmptyError, DataError
 
 __all__ = ("LONG_STRING", "STRING", "STRING2", "STRINGN", "STRINGI", "SHORT_STRING", "CSTRING")
 

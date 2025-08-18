@@ -1,5 +1,7 @@
+from typing import ClassVar
+
 from ..cip_object import CIPObject
 
 
 class DeviceNet(CIPObject):
-    class_code = 0x03
+    class_code: int = 0x03
